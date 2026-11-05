@@ -26,13 +26,13 @@ CONTACT_SUBMISSIONS = []
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     """Render the homepage containing a broken link and broken image asset."""
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="index.html")
 
 
 @app.get("/contact", response_class=HTMLResponse)
 async def contact_page(request: Request):
     """Render the contact feedback form with weak HTML validation."""
-    return templates.TemplateResponse("contact.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="contact.html")
 
 
 # WEB BUG 1: Unhandled Server Crash on Invalid/Empty Email in Form

@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BugHunter AI — Otonom Test & Hata Analiz Paneli</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        pre, code, .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .diff-add { background-color: #dcfce7; color: #166534; }
+        .diff-del { background-color: #fee2e2; color: #991b1b; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+    <!-- Header -->
+    <header class="bg-slate-900 text-white shadow-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <span class="text-3xl">🎯</span>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight">BugHunter AI</h1>
+                    <p class="text-xs text-slate-400">İnsan Onaylı Otonom Test & Hata Analiz Ajanı</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    ● Sistem Çevrimiçi
+                </span>
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                    🛡️ Human-in-the-Loop Aktif
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-6 py-8 space-y-8">
+        <!-- Target & Criteria Configuration Card -->
+        <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 class="text-lg font-bold text-slate-900 mb-4 flex items-center space-x-2">
+                <span>⚙️</span>
+                <span>Test Hedefi ve Kriter Belirleme</span>
+            </h2>
+
+            <form id="hunt-form" class="space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="md:col-span-2 space-y-2">
+                        <label class="block text-sm font-semibold text-slate-700">Hedef URL veya Spesifikasyon</label>
+                        <div class="flex space-x-2">
+                            <input type="text" id="target-url" value="http://127.0.0.1:8001/openapi.json"
+                                class="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm font-mono"
+                                placeholder="http://127.0.0.1:8001/openapi.json veya http://127.0.0.1:8002">
+                            <select id="target-type" class="px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-sm font-medium">
+                                <option value="API">REST API (OpenAPI)</option>
+                                <option value="WEB">Web Sitesi / Sayfa</option>
+                            </select>
+                        </div>
+                        <div class="flex space-x-2 text-xs text-slate-500 pt-1">
+                            <span>Hızlı Seçenekler:</span>
+                            <button type="button" onclick="setTarget('http://127.0.0.1:8001/openapi.json', 'API')" class="text-blue-600 hover:underline">Örnek Demo API</button>
+                            <span>•</span>
+                            <button type="button" onclick="setTarget('http://127.0.0.1:8002', 'WEB')" class="text-blue-600 hover:underline">Örnek Demo Web Portalı</button>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2">
+                        <label class="block text-sm font-semibold text-slate-700">Maksimum SLA Yanıt Eşiği (ms)</label>
+                        <input type="number" id="sla-threshold" value="500"
+                            class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm font-mono">
+                    </div>
+                </div>
+
+                <!-- Test Criteria Badges Checkbox -->
+                <div class="space-y-2">
+                    <label class="block text-sm font-semibold text-slate-700">Çalıştırılacak Test Kriterleri</label>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                        <label class="flex items-center p-3 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50 transition">
+                            <input type="checkbox" name="criteria" value="FUNCTIONAL" checked class="rounded text-blue-600 focus:ring-blue-500 mr-2.5">
+                            <div>
+                                <span class="text-xs font-bold text-emerald-700 block">🟢 Fonksiyonel</span>
+                                <span class="text-[11px] text-slate-500">Happy Path & Şema</span>
+                            </div>
+                        </label>
+
+                        <label class="flex items-center p-3 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50 transition">
+                            <input type="checkbox" name="criteria" value="BOUNDARY" checked class="rounded text-blue-600 focus:ring-blue-500 mr-2.5">
+                            <div>
+                                <span class="text-xs font-bold text-amber-700 block">🟡 Sınır Değerleri</span>
+                                <span class="text-[11px] text-slate-500">Negatif / Boş / Aşırı</span>
+                            </div>
+                        </label>
+
+                        <label class="flex items-center p-3 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50 transition">
+                            <input type="checkbox" name="criteria" value="SECURITY" checked class="rounded text-blue-600 focus:ring-blue-500 mr-2.5">
+                            <div>
+                                <span class="text-xs font-bold text-rose-700 block">🔴 Güvenlik & Yetki</span>
+                                <span class="text-[11px] text-slate-500">Eksik Token / Yetki</span>
+                            </div>
+                        </label>
+
+                        <label class="flex items-center p-3 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50 transition">
+                            <input type="checkbox" name="criteria" value="PERFORMANCE" checked class="rounded text-blue-600 focus:ring-blue-500 mr-2.5">
+                            <div>
+                                <span class="text-xs font-bold text-indigo-700 block">🔵 Performans & SLA</span>
+                                <span class="text-[11px] text-slate-500">Gecikme & Timeout</span>
+                            </div>
+                        </label>
+
+                        <label class="flex items-center p-3 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50 transition">
+                            <input type="checkbox" name="criteria" value="WEB_VALIDATION" checked class="rounded text-blue-600 focus:ring-blue-500 mr-2.5">
+                            <div>
+                                <span class="text-xs font-bold text-purple-700 block">🟣 Web Bütünlük</span>
+                                <span class="text-[11px] text-slate-500">Kırık Link & Form</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between pt-2 border-t border-slate-100">
+                    <p class="text-xs text-slate-500">Döngü: Test Et ➔ Araştır ➔ Kanıtla ➔ Onay İste ➔ Güvenli Düzelt ➔ Doğrula</p>
+                    <button type="submit" id="btn-start" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm rounded-lg shadow-sm flex items-center space-x-2 transition cursor-pointer">
+                        <span>🚀 Otonom Test Avını Başlat</span>
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <!-- Loading Indicator -->
+        <div id="loading" class="hidden text-center py-12">
+            <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent"></div>
+            <p class="mt-4 text-sm font-semibold text-slate-600">Dokümantasyon analiz ediliyor, otonom testler üretilip koşturuluyor...</p>
+        </div>
+
+        <!-- Results Section -->
+        <section id="results-section" class="hidden space-y-8">
+            <!-- Metrics Summary Row -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                    <span class="text-xs font-semibold text-slate-500 uppercase">Toplam Test</span>
+                    <p id="metric-total" class="text-2xl font-bold text-slate-900 mt-1">0</p>
+                </div>
+                <div class="bg-white p-5 rounded-xl border border-emerald-200 shadow-sm bg-emerald-50/20">
+                    <span class="text-xs font-semibold text-emerald-600 uppercase">Başarılı (Passed)</span>
+                    <p id="metric-passed" class="text-2xl font-bold text-emerald-700 mt-1">0</p>
+                </div>
+                <div class="bg-white p-5 rounded-xl border border-rose-200 shadow-sm bg-rose-50/20">
+                    <span class="text-xs font-semibold text-rose-600 uppercase">Tespit Edilen Hatalar</span>
+                    <p id="metric-failed" class="text-2xl font-bold text-rose-700 mt-1">0</p>
+                </div>
+                <div class="bg-white p-5 rounded-xl border border-purple-200 shadow-sm bg-purple-50/20">
+                    <span class="text-xs font-semibold text-purple-600 uppercase">Hazırlanan Düzeltmeler</span>
+                    <p id="metric-proposals" class="text-2xl font-bold text-purple-700 mt-1">0</p>
+                </div>
+            </div>
+
+            <!-- Defects and Human Approval Queue -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900">🛡️ Tespit Edilen Hatalar & İnsan Onay Sırası</h3>
+                        <p class="text-xs text-slate-500">Her hata için bağımsız kanıt kodu ve Unified Diff yama teklifi hazırdır.</p>
+                    </div>
+                    <span id="queue-badge" class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800">
+                        0 Hata
+                    </span>
+                </div>
+
+                <div id="defects-container" class="divide-y divide-slate-200">
+                    <!-- Populated via JavaScript -->
+                </div>
+            </div>
+
+            <!-- Full Test Execution Log Table -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 class="text-base font-bold text-slate-900">📋 Tüm Koşturulan Testler</h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-100 text-slate-600 uppercase font-semibold">
+                            <tr>
+                                <th class="px-6 py-3">Durum</th>
+                                <th class="px-6 py-3">Test ID & Başlık</th>
+                                <th class="px-6 py-3">Kriter</th>
+                                <th class="px-6 py-3">Metot & Hedef</th>
+                                <th class="px-6 py-3">Yanıt Kodu</th>
+                                <th class="px-6 py-3">Süre</th>
+                            </tr>
+                        </thead>
+                        <tbody id="test-table-body" class="divide-y divide-slate-100">
+                            <!-- Populated via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- JavaScript Controller -->
+    <script>
+        function setTarget(url, type) {
+            document.getElementById('target-url').value = url;
+            document.getElementById('target-type').value = type;
+        }
+
+        document.getElementById('hunt-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const url = document.getElementById('target-url').value.trim();
+            const targetType = document.getElementById('target-type').value;
+            const slaThreshold = parseFloat(document.getElementById('sla-threshold').value) || 500.0;
+
+            const selectedCriteria = Array.from(document.querySelectorAll('input[name="criteria"]:checked'))
+                .map(cb => cb.value);
+
+            if (!url) {
+                alert("Lütfen geçerli bir hedef URL girin.");
+                return;
+            }
+
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('results-section').classList.add('hidden');
+            document.getElementById('btn-start').disabled = true;
+
+            try {
+                const response = await fetch('/api/run-hunt', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        target_url: url,
+                        target_type: targetType,
+                        criteria: selectedCriteria,
+                        sla_threshold_ms: slaThreshold
+                    })
+                });
+
+                const data = await response.json();
+                renderResults(data);
+            } catch (err) {
+                alert("Hata oluştu: " + err.message);
+            } finally {
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('btn-start').disabled = false;
+            }
+        });
+
+        function renderResults(data) {
+            document.getElementById('results-section').classList.remove('hidden');
+            document.getElementById('metric-total').textContent = data.summary.total_tests;
+            document.getElementById('metric-passed').textContent = data.summary.passed_tests;
+            document.getElementById('metric-failed').textContent = data.summary.failed_tests;
+            document.getElementById('metric-proposals').textContent = data.proposals.length;
+            document.getElementById('queue-badge').textContent = `${data.proposals.length} Onay Bekliyor`;
+
+            // Render Defects
+            const defectsContainer = document.getElementById('defects-container');
+            defectsContainer.innerHTML = '';
+
+            if (data.proposals.length === 0) {
+                defectsContainer.innerHTML = `
+                    <div class="p-8 text-center text-slate-500">
+                        <span class="text-3xl block mb-2">🎉</span>
+                        <p class="font-semibold text-slate-700">Tebrikler! Seçilen kriterlere göre hiçbir hata tespit edilmedi.</p>
+                    </div>
+                `;
+            } else {
+                data.proposals.forEach(item => {
+                    const defectCard = createDefectCard(item);
+                    defectsContainer.appendChild(defectCard);
+                });
+            }
+
+            // Render Table
+            const tableBody = document.getElementById('test-table-body');
+            tableBody.innerHTML = '';
+            data.results.forEach(res => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition";
+                const badge = res.passed
+                    ? `<span class="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-100 text-emerald-800">BAŞARILI</span>`
+                    : `<span class="px-2 py-0.5 rounded text-[11px] font-bold bg-rose-100 text-rose-800">BAŞARISIZ</span>`;
+
+                tr.innerHTML = `
+                    <td class="px-6 py-3">${badge}</td>
+                    <td class="px-6 py-3 font-medium text-slate-800">${res.test_id}</td>
+                    <td class="px-6 py-3"><span class="px-2 py-0.5 rounded text-[10px] bg-slate-100 text-slate-700">${res.criterion}</span></td>
+                    <td class="px-6 py-3 font-mono text-[11px]">${res.method} ${res.url}</td>
+                    <td class="px-6 py-3 font-mono">${res.status_code || 'N/A'}</td>
+                    <td class="px-6 py-3 font-mono text-slate-500">${res.elapsed_ms}ms</td>
+                `;
+                tableBody.appendChild(tr);
+            });
+        }
+
+        function createDefectCard(item) {
+            const div = document.createElement('div');
+            div.id = `defect-card-${item.proposal.fix_id}`;
+            div.className = "p-6 space-y-4";
+
+            const diffLines = (item.proposal.unified_diff || '').split('\n').map(line => {
+                if (line.startsWith('+') && !line.startsWith('+++')) return `<div class="diff-add px-2 py-0.5">${escapeHtml(line)}</div>`;
+                if (line.startsWith('-') && !line.startsWith('---')) return `<div class="diff-del px-2 py-0.5">${escapeHtml(line)}</div>`;
+                return `<div class="text-slate-600 px-2 py-0.5">${escapeHtml(line)}</div>`;
+            }).join('');
+
+            div.innerHTML = `
+                <div class="flex items-start justify-between">
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <span class="px-2 py-0.5 rounded text-xs font-bold bg-rose-100 text-rose-800">${item.evidence.severity}</span>
+                            <span class="text-xs font-mono text-slate-500">${item.evidence.bug_id}</span>
+                        </div>
+                        <h4 class="text-base font-bold text-slate-900 mt-1">${item.evidence.title}</h4>
+                        <p class="text-xs text-slate-600 font-mono mt-0.5">${item.evidence.method} ${item.evidence.target_url}</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs bg-slate-50 p-4 rounded-lg border border-slate-200">
+                    <div>
+                        <span class="font-bold text-emerald-800 block mb-1">Beklenen Davranış:</span>
+                        <p class="text-slate-600">${item.evidence.expected_behavior}</p>
+                    </div>
+                    <div>
+                        <span class="font-bold text-rose-800 block mb-1">Gerçekleşen Davranış (Hata):</span>
+                        <p class="text-slate-600">${item.evidence.actual_behavior}</p>
+                    </div>
+                    <div class="md:col-span-2 pt-2 border-t border-slate-200">
+                        <span class="font-bold text-slate-700 block mb-1">Kök Neden Analizi:</span>
+                        <p class="text-slate-600">${item.evidence.root_cause_hypothesis}</p>
+                    </div>
+                </div>
+
+                <!-- Reproduction Code Accordion -->
+                <details class="text-xs bg-slate-900 text-slate-100 rounded-lg overflow-hidden border border-slate-800">
+                    <summary class="px-4 py-2.5 font-semibold text-slate-300 cursor-pointer hover:bg-slate-800 flex items-center justify-between">
+                        <span>🧪 Bağımsız Çalıştırılabilir Hata Kanıtı (Reproduction Script)</span>
+                        <span class="text-[10px] text-slate-400">Görüntüle / Kopyala</span>
+                    </summary>
+                    <pre class="p-4 overflow-x-auto text-[11px] font-mono text-emerald-400 bg-slate-950">${escapeHtml(item.evidence.reproduction_code)}</pre>
+                </details>
+
+                <!-- Unified Diff Viewer -->
+                <div class="text-xs rounded-lg border border-slate-200 overflow-hidden">
+                    <div class="px-4 py-2 bg-slate-100 font-semibold text-slate-700 border-b border-slate-200 flex items-center justify-between">
+                        <span>📝 Önerilen Kod Düzeltmesi (Unified Diff): <span class="font-mono text-blue-600">${item.proposal.target_file}</span></span>
+                        <span class="text-[10px] text-slate-500">${item.proposal.explanation}</span>
+                    </div>
+                    <div class="p-3 bg-white font-mono text-[11px] overflow-x-auto divide-y divide-slate-100">
+                        ${diffLines || '<p class="text-slate-400">Diff oluşturulamadı.</p>'}
+                    </div>
+                </div>
+
+                <!-- Human Approval Gate Action Bar -->
+                <div class="flex items-center justify-between p-3 bg-amber-50 rounded-lg border border-amber-200">
+                    <div class="flex items-center space-x-2">
+                        <span class="text-base">🛡️</span>
+                        <span class="text-xs font-semibold text-amber-900">İnsan Onay Kilidi: Kod değişikliği onayınız olmadan uygulanmaz.</span>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button onclick="approveFix('${item.proposal.fix_id}')" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-md shadow-sm transition">
+                            ✅ Onayla ve Düzelt (Safe Patch)
+                        </button>
+                        <button onclick="rejectFix('${item.proposal.fix_id}')" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-xs rounded-md transition">
+                            ❌ Reddet
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Regression Output Box (Hidden initially) -->
+                <div id="regression-box-${item.proposal.fix_id}" class="hidden p-4 rounded-lg text-xs space-y-2">
+                    <!-- Populated after approval -->
+                </div>
+            `;
+            return div;
+        }
+
+        async function approveFix(fixId) {
+            if (!confirm("Bu kod düzeltmesini test ortamında uygulamak ve regresyon testlerini çalıştırmak istiyor musunuz?")) return;
+
+            try {
+                const response = await fetch('/api/approve-fix', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fix_id: fixId })
+                });
+
+                const data = await response.json();
+                const regBox = document.getElementById(`regression-box-${fixId}`);
+                regBox.classList.remove('hidden');
+
+                if (data.report.verdict === 'CLEAN_FIX') {
+                    regBox.className = "p-4 rounded-lg text-xs space-y-2 bg-emerald-50 border border-emerald-200 text-emerald-900";
+                    regBox.innerHTML = `
+                        <div class="font-bold text-sm">🎉 ${data.report.summary}</div>
+                        <div class="grid grid-cols-2 gap-2 text-[11px] pt-1">
+                            <div>Önceki Başarılı Test: <b>${data.report.before_pass_count}</b></div>
+                            <div>Düzeltme Sonrası Başarılı: <b>${data.report.after_pass_count}</b></div>
+                            <div>Regresyon / Yan Etki: <b class="text-emerald-700">0 (Sıfır)</b></div>
+                            <div>Hedef Hata Durumu: <b class="text-emerald-700">Giderildi</b></div>
+                        </div>
+                    `;
+                } else {
+                    regBox.className = "p-4 rounded-lg text-xs space-y-2 bg-rose-50 border border-rose-200 text-rose-900";
+                    regBox.innerHTML = `
+                        <div class="font-bold text-sm">⚠️ ${data.report.summary}</div>
+                        <p>Tespit Edilen Yan Etkiler: ${data.report.regressions_detected.join(', ')}</p>
+                    `;
+                }
+            } catch (err) {
+                alert("Hata: " + err.message);
+            }
+        }
+
+        async function rejectFix(fixId) {
+            try {
+                await fetch('/api/reject-fix', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fix_id: fixId })
+                });
+                const card = document.getElementById(`defect-card-${fixId}`);
+                if (card) {
+                    card.innerHTML = `<div class="p-4 text-xs font-semibold text-slate-500 bg-slate-100 rounded-lg">Bu düzeltme kullanıcı tarafından reddedildi.</div>`;
+                }
+            } catch (err) {
+                alert("Hata: " + err.message);
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+    </script>
+</body>
+</html>

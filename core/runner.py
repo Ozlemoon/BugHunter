@@ -31,8 +31,14 @@ class TestRunner:
                 results.append(res)
         return results
 
-    def run_test(self, client: httpx.Client, test: TestCase) -> TestResult:
+    def run_test(self, client: Optional[httpx.Client], test: TestCase) -> TestResult:
         """Executes a single test case and evaluates all assertions."""
+        if client is None:
+            with httpx.Client(timeout=self.timeout, follow_redirects=False) as c:
+                return self._execute_test_request(c, test)
+        return self._execute_test_request(client, test)
+
+    def _execute_test_request(self, client: httpx.Client, test: TestCase) -> TestResult:
         failed_assertions: List[str] = []
         status_code: Optional[int] = None
         elapsed_ms: float = 0.0
