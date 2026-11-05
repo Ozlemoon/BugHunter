@@ -1,97 +1,174 @@
 # 🎯 BugHunter AI — İnsan Onaylı Evrensel Yazılım Test ve Hata Analiz Ajanı
 ### *Universal Autonomous Testing & Bug Analysis Agent with Human-in-the-Loop Verification*
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Python: 3.10+](https://img.shields.io/badge/Python-3.10%2B-brightgreen.svg)](https://python.org)
+[![Tests: 11 Passed](https://img.shields.io/badge/Tests-11%20Passed-success.svg)](https://github.com/Ozlemoon/BugHunter)
+
 > **API'ler, Web Siteleri, Web Uygulamaları ve Kod Depolarını kullanıcı tarafından belirlenen kriterlere göre otonom olarak test eden, hataları tespit edip kanıtlayan ve insan onayıyla güvenli kod düzeltmesi gerçekleştiren yeni nesil yapay zeka ajanı.**
 
 ---
 
-## 🚀 Proje Vizyonu ve Genişletilmiş Kapsam
+## 🚀 Proje Vizyonu ve Temel Amaç
 
-BugHunter AI; yalnızca tek bir repoya veya sadece API'lere sıkışmış geleneksel araçların ötesine geçerek, **herhangi bir yazılım projesini (API, Web Sitesi, Web Uygulaması, Kod Deposu)** kullanıcının belirlediği özel test kriterlerine göre otonom analiz eden evrensel bir test ve hata ayıklama ajanıdır.
+**BugHunter AI**; modern yazılım mühendisliğinde test süreçlerini otonomlaştırırken kontrolü test mühendisine bırakan **Human-in-the-Loop** merkezli bir test ve hata ayıklama ajanıdır. 
 
-### 🎯 Desteklenen Hedef Sistemler (Multi-Target Architecture)
-1. **REST API & Mikroservisler:** OpenAPI / Swagger spesifikasyonları veya canlı endpoint'ler üzerinden şema doğrulaması, veri manipülasyonu ve yetki testleri.
-2. **Web Uygulamaları ve Web Siteleri:** Herhangi bir web sitesinin veya web uygulamasının URL'si üzerinden; form doğrulamaları, kırık linkler (broken links), HTTP başlıkları/güvenlik konfigürasyonları, DOM bütünlüğü ve yanıt süreleri testleri.
-3. **Kod Depoları & Modüller (Code Repositories):** Kaynak kod düzeyinde fonksiyonlar, sınıflar ve iş mantığı için kriter bazlı birim (unit) ve entegrasyon testlerinin otomatik üretimi ve koşturulması.
-
----
-
-## ⚙️ Kriter Bazlı Test Motoru (Criteria-Driven Testing Engine)
-
-Kullanıcı, BugHunter AI'ya hedefi ve çalıştırmak istediği test kriterlerini açıkça belirtebilir:
-
-- 🟢 **Fonksiyonel Test Kriterleri (Functional):** Temel iş akışları, beklenen veri dönüşleri, kullanıcı yolculukları.
-- 🟡 **Sınır ve Kenar Durum Kriterleri (Boundary & Edge Cases):** Negatif sayılar, aşırı uzun metinler, null/boş girdiler, tip uyuşmazlıkları.
-- 🔴 **Güvenlik ve Zafiyet Kriterleri (Security & Robustness):** Yetkisiz erişim denemeleri (BOLA/IDOR), SQL Injection / XSS girdi kontrolleri, güvensiz HTTP başlıkları, hassas veri sızıntısı.
-- 🔵 **Performans ve Yanıt Süresi Kriterleri (Performance & SLA):** Maksimum yanıt süresi (örn. <500ms), sunucu yük direnci ve durum kodu sözleşmeleri.
-- 🟣 **Web & Form Bütünlük Kriterleri (Web & Form Validation):** Bozuk görsel ve link tespiti, formların boş veya hatalı gönderim davranışı, hata mesajlarının doğruluğu.
-
----
-
-## 🔄 Temel Döngü (The Core Loop)
+Yalnızca "test koşup hata bildirmekle" kalmaz; hatayı bağımsız olarak yeniden üreten minimal kanıt kodunu (reproduction script) çıkarır, çözüm için **Unified Diff** hazırlar, test mühendisinden açık onay ister ve düzeltmeyi test ortamında uygulayarak **regresyon (yan etki)** denetimi gerçekleştirir.
 
 ```text
 ┌─────────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌───────────────┐     ┌──────────────────┐
 │ Kriter & Hedef  │ ──► │   Test Et    │ ──► │  Kanıt Topla │ ──► │  Onay İste   │ ──► │ Güvenli Düzelt│ ──► │ Yeniden Test Et  │
-│  (API/Web/Repo) │     │ (Autonomous) │     │ (Reproduce)  │     │  (HITL Gate) │     │ (Safe Patch)  │     │  (No Regression) │
+│ (API / Web / UI)│     │ (Autonomous) │     │ (Reproduce)  │     │ (HITL Gate)  │     │ (Safe Patch)  │     │ (No Regression)  │
 └─────────────────┘     └──────────────┘     └──────────────┘     └──────────────┘     └───────────────┘     └──────────────────┘
 ```
 
-1. **Hedef ve Kriter Girişi:** Kullanıcı test edilecek hedefi (API dokümanı, Canlı URL veya Kod Deposu) ve test kriterlerini tanımlar.
-2. **Otonom Test Üretimi ve Koşumu:** Ajan, kriterlere uygun test senaryolarını dinamik üretir ve hedef üzerinde çalıştırır.
-3. **Araştırma ve Kanıt Toplama:** Başarısız testleri izole eder, hatayı bağımsız olarak yeniden üreten minimal bir kanıt scripti (reproduction script) ve "Beklenen vs Gerçekleşen" kanıt raporu oluşturur.
-4. **İnsan Onayı (Human-in-the-Loop Gate):** Çözüm için oluşturulan renkli kod yamasını (diff) test mühendisine sunar. Onay gelmeden kaynak koda ASLA dokunulmaz.
-5. **Güvenli Düzeltme:** Onaylanan yama yalnızca kontrollü test/sandbox ortamında uygulanır.
-6. **Regresyon Doğrulaması:** Ajan, yapılan düzeltmenin diğer özellikleri bozup bozmadığını anlamak için tüm test paketini yeniden çalıştırır ve "Önce / Sonra" karşılaştırma raporu sunar.
+---
+
+## 🌟 Öne Çıkan Özgün Yetenekler
+
+1. **Evrensel Çoklu Hedef (Multi-Target Architecture):**
+   - **REST API'ler & Mikroservisler:** OpenAPI 3.x / Swagger 2.0 dokümanları üzerinden otomatik şema çözümleme ve endpoint testleri.
+   - **Web Siteleri & Web Uygulamaları:** Canlı URL üzerinden form doğrulamaları, kırık link tespiti (broken links), eksik varlıklar (assets) ve DOM bütünlüğü.
+   - **Kod Depoları (Repositories):** Kaynak kod düzeyinde kurallar ve test üretimi.
+
+2. **Kriter Bazlı Test Motoru (Criteria-Driven Engine):**
+   - 🟢 **FUNCTIONAL (Fonksiyonel):** Happy Path ve beklenen veri sözleşmeleri.
+   - 🟡 **BOUNDARY (Sınır Durumları):** Negatif değerler, aşırı uzun veriler, null / boş parametreler.
+   - 🔴 **SECURITY (Güvenlik):** Yetkisiz silme/güncelleme denemeleri (Broken Object Level Authorization - BOLA), eksik auth kontrolleri.
+   - 🔵 **PERFORMANCE (SLA):** Yanıt sürelerinin belirlenen milisaniye eşiğinin (örn. `<500ms`) altında kalma garantisi.
+   - 🟣 **WEB_VALIDATION (Web & Form Bütünlüğü):** Bozuk bağlantılar, kırık görseller, form alanlarının hatalı girdi karşısındaki direnci.
+
+3. **Çalıştırılabilir Bağımsız Kanıt (Reproduction Script):**
+   - Her hata için tek başına çalıştırılabilen (`python reproduce_bug.py`) bağımsız bir kanıt scripti oluşturur.
+
+4. **Kesin İnsan Onayı Güvenlik Kilidi (Human-in-the-Loop Gate):**
+   - Ajan insan onayı almadan kaynak koda ASLA dokunmaz.
+   - Onaylanmamış bir yama uygulanmak istendiğinde anında `PermissionError` fırlatır.
+   - Tüm işlemlerden önce otomatik `.bughunter.bak` yedeği alır; istendiğinde anında `rollback` (geri alma) imkanı sunar.
+
+5. **Regresyon ve Yan Etki Denetimi:**
+   - Düzeltme sonrası sadece hatanın çözüldüğünü teyit etmekle kalmaz; önceden geçen tüm testleri yeniden çalıştırarak yeni bir hatanın tetiklenip tetiklenmediğini (`CLEAN_FIX` vs `REGRESSION_DETECTED`) garanti eder.
+
+6. **%100 Ücretsiz ve Açık Kaynak:**
+   - Ücretli herhangi bir API anahtarına veya aboneliğe ihtiyaç duymaz. Tamamen yerel çalışabilen açık kaynak kütüphaneler üzerine inşa edilmiştir.
 
 ---
 
-## 🛠️ Sistem Mimarisi ve Modüller
+## 📂 Proje Dizin Yapısı
 
 ```
 BugHunter/
-├── core/
-│   ├── targets/            # Hedef adaptörleri
-│   │   ├── api_target.py       # REST / OpenAPI hedef yöneticisi
-│   │   ├── web_target.py       # Web sitesi / Web uygulaması hedef yöneticisi
-│   │   └── repo_target.py      # Kod deposu hedef yöneticisi
-│   ├── criteria/           # Kriter motoru
-│   │   ├── base.py             # Kriter temel arayüzü
-│   │   ├── functional.py       # Fonksiyonel kural motoru
-│   │   ├── boundary.py         # Sınır & kenar durum motoru
-│   │   └── security.py         # Güvenlik & doğrulama motoru
-│   ├── generator.py        # Otonom test senaryosu üretici
-│   ├── runner.py           # Dinamik test koşturucu
-│   ├── analyzer.py         # Kök neden analizi & kanıt toplama motoru
-│   ├── patcher.py          # Unified Diff ve yama motoru
-│   └── verifier.py         # Regresyon ve doğrulama motoru
-├── playground/             # Demo hedefleri (API + Web Uygulaması)
-│   ├── sample_api.py       # Bilerek hatalar barındıran örnek REST API
-│   ├── sample_web.py       # Bilerek form/link hataları barındıran örnek web sitesi
-│   └── templates/          # Web sitesi şablonları
-├── web/                    # İnteraktif Web Kontrol Paneli
-│   ├── app.py              # BugHunter Web Dashboard backend
-│   ├── static/             # CSS / JS / Diff görüntüleyici
-│   └── templates/          # Gösterge paneli ve onay ekranı
-├── tests/                  # BugHunter'ın kendi iç testleri
-├── cli.py                  # Terminal arayüzü
-├── main.py                 # Ana başlatıcı
-├── requirements.txt        # %100 Ücretsiz & Açık kaynak bağımlılıklar
+├── core/                           # Temel Ajan Motoru
+│   ├── targets/                    # Hedef Adaptörleri
+│   │   ├── api_target.py           # OpenAPI / Swagger çözümleyici
+│   │   └── web_target.py           # Web sitesi / DOM / Form çözümleyici
+│   ├── models.py                   # Pydantic v2 veri modelleri & kriterler
+│   ├── generator.py                # Kriter bazlı otonom test üretici
+│   ├── runner.py                   # Dinamik test koşturucu & kural denetleyici
+│   ├── analyzer.py                 # Hata analiz & bağımsız kanıt üretici
+│   ├── patcher.py                  # Unified Diff & İnsan Onay Kilidi (Patcher)
+│   └── verifier.py                 # Regresyon doğrulama & karşılaştırma motoru
+├── playground/                     # Canlı Demo Hedefleri (Bilerek hatalı)
+│   ├── sample_api.py               # 4 gerçekçi hata içeren REST API
+│   ├── sample_web.py               # Form açığı & kırık link içeren Web uygulaması
+│   ├── runner.py                   # Hedefleri ayağa kaldıran servis
+│   └── templates/                  # Demo web sayfaları
+├── web/                            # İnteraktif Web Kontrol Paneli
+│   ├── app.py                      # Dashboard backend (FastAPI)
+│   └── templates/                  # Tailwind CSS modern gösterge paneli
+│       └── dashboard.html
+├── tests/                          # Kapsamlı Otomasyon Testleri (11 Test)
+│   ├── test_parser_and_generator.py
+│   ├── test_runner_and_analyzer.py
+│   ├── test_patcher.py
+│   ├── test_verifier.py
+│   └── test_web_dashboard.py
+├── cli.py                          # Renkli Terminal Arayüzü (Rich CLI)
+├── main.py                         # Master Launcher (Demo, Web, CLI)
+├── requirements.txt                # Bağımlılıklar
 └── README.md
 ```
 
 ---
 
-## 🌟 Özgünlük ve Farkı
+## ⚡ Hızlı Başlangıç ve Kurulum
 
-- **Çoklu Hedef (Multi-Target):** Sadece API değil; web siteleri, web uygulamaları ve doğrudan kaynak kod depolarını aynı çatı altında test edebilme.
-- **Kriter Odaklı (Criteria-Driven):** Kullanıcının tanımladığı spesifik test standartlarını (SLA süreleri, OWASP kontrolleri, form kuralları vb.) hedef alarak test türetme.
-- **Tekrarlanabilir Kanıt (Reproducibility Evidence):** Hatanın bağımsız olarak tek başına tetiklenebildiğini kanıtlayan kod ve izole senaryo.
-- **Kesin İnsan Onayı (Human-in-the-Loop):** Kod değişiklikleri asla insan denetimi ve onayı olmadan canlıya veya depoya uygulanmaz.
-- **Regresyon Denetimi:** Düzeltmenin yan etki yaratıp yaratmadığı bağımsız olarak teyit edilir.
-- **%100 Ücretsiz ve Yerel Çalışabilir:** Ücretli hiçbir API'ye bağımlı olmadan yerel ve açık kaynak araçlarla tam performans çalışır.
+### 1. Depoyu Klonlayın ve Sanal Ortamı Hazırlayın
+```bash
+git clone https://github.com/Ozlemoon/BugHunter.git
+cd BugHunter
+
+# Sanal ortamı oluşturun ve aktifleştirin
+python -m venv venv
+# Windows:
+.\venv\Scripts\activate
+# Linux/macOS:
+source venv/bin/activate
+
+# Bağımlılıkları yükleyin
+pip install -r requirements.txt
+```
+
+---
+
+## 🎮 Çalıştırma Modları
+
+### 🌟 1. Tek Tıkla Canlı Demo (Önerilen)
+Hem bilerek hatalı demo hedeflerini hem de interaktif web panelini aynı anda başlatır:
+```bash
+python main.py demo
+```
+- **Web Kontrol Paneli:** `http://127.0.0.1:8000`
+- **Hedef Demo API:** `http://127.0.0.1:8001/openapi.json`
+- **Hedef Demo Web Sitesi:** `http://127.0.0.1:8002`
+
+Tarayıcınızda `http://127.0.0.1:8000` adresine gidin, kriterleri seçin ve **"🚀 Otonom Test Avını Başlat"** butonuna tıklayın!
+
+---
+
+### 💻 2. Terminal Üzerinden İnteraktif CLI
+Terminali tercih eden test mühendisleri için renkli `rich` terminal arayüzü:
+```bash
+# Demo hedeflerini arka planda başlatın (isteğe bağlı):
+python main.py playground
+
+# Farklı bir terminalde CLI'ı başlatın:
+python main.py cli --url http://127.0.0.1:8001/openapi.json --type API
+```
+Terminal üzerinden testlerin koşumunu izleyebilir, üretilen Unified Diff yamasını inceleyebilir ve terminal sorusuna `y` (evet) diyerek onayı verebilirsiniz:
+```text
+🛡️ [HUMAN-IN-THE-LOOP ONAY KİLİDİ]
+Bu kod düzeltmesini sample_api.py dosyasına uygulamayı onaylıyor musunuz? [Y/n]: y
+✔ Düzeltme uygulandı! (Yedek: sample_api.py.bughunter.bak)
+[6/6] 🔄 Regresyon doğrulaması koşturuluyor...
+✅ Target defect BUG-API-BOUND-NEG-ORDER is completely resolved with ZERO regressions.
+```
+
+---
+
+### 🧪 3. Birim ve Entegrasyon Testlerini Çalıştırma
+Tüm motorların doğruluğunu test etmek için:
+```bash
+pytest tests/
+```
+Çıktı: `11 passed in ~1.9s` 🚀
+
+---
+
+## 🎯 Test Edilebilen Gerçekçi Hatalar (Playground)
+
+BugHunter AI'ın gücünü test edebilmeniz için `playground/` altına bilerek şu gerçek dünya hataları yerleştirilmiştir:
+
+| Hedef | Endpoint / Sayfa | Hata Tipi | Ajanın Davranışı |
+| :--- | :--- | :--- | :--- |
+| **API** | `POST /orders` | **Boundary / Logic Bug:** Negatif adet (`quantity: -5`) kabul edilip stok artırılıyor. | Ajan 422 yerine 201 döndüğünü yakalar, `if order.quantity <= 0` kontrolü ekleyen diff sunar. |
+| **API** | `GET /users/{id}/profile` | **Server Crash (500):** Profili olmayan kullanıcıda doğrudan `KeyError` ile çökme. | 500 hatasını yakalar, güvenli `not in USER_PROFILES_DB` 404 kontrolü ekleyen diff önerir. |
+| **API** | `DELETE /products/{id}` | **Broken Auth:** Yetkisiz kullanıcılar ürün silebiliyor. | DELETE isteğinin auth'suz 200 döndüğünü yakalar, admin token zorunluluğu getiren diff hazırlar. |
+| **API** | `GET /products/heavy-search` | **SLA / Performance:** Yanıt 1.3 saniye sürerek SLA standardını aşıyor. | Gecikmeyi ölçer ve SLA aşım kanıtı sunar. |
+| **WEB** | `POST /submit-contact` | **Form Validation Crash (500):** E-posta '@' içermediğinde split hatasıyla çökme. | Formu test eder, 500 aldığını kanıtlar ve geçerli e-posta doğrulaması önerir. |
+| **WEB** | `GET /legacy-api-docs` | **Broken Link:** Menüdeki link 404 sayfasına gidiyor. | Web tarayıcı kırık bağlantıyı izole eder ve raporlar. |
 
 ---
 
 ## 📄 Lisans
-MIT License.
+Bu proje **MIT Lisansı** altında lisanslanmıştır. Tamamen ücretsiz, açık kaynak ve genişletilebilir olarak geliştirilmiştir.
