@@ -145,3 +145,18 @@ class FixProposal(BaseModel):
     explanation: str
     unified_diff: str
     approved: bool = False
+
+
+class RegressionReport(BaseModel):
+    __test__ = False
+    fix_id: str
+    bug_id: str
+    bug_fixed: bool
+    before_pass_count: int
+    before_fail_count: int
+    after_pass_count: int
+    after_fail_count: int
+    regressions_detected: List[str] = Field(default_factory=list)
+    verdict: str                        # CLEAN_FIX, REGRESSION_DETECTED, FIX_UNSUCCESSFUL
+    summary: str
+
