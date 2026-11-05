@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BugShop Portal — Contact & Feedback</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 2rem; background: #f8fafc; color: #1e293b; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+        h1 { color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.5rem; font-size: 1.5rem; }
+        .form-group { margin-bottom: 1.25rem; }
+        label { display: block; font-weight: 500; margin-bottom: 0.5rem; }
+        input, textarea { width: 100%; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; }
+        .btn { background: #2563eb; color: white; padding: 0.6rem 1.2rem; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; }
+        .btn:hover { background: #1d4ed8; }
+        .back-link { display: inline-block; margin-top: 1rem; color: #64748b; text-decoration: none; }
+        .back-link:hover { color: #0f172a; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Contact & Feedback Form</h1>
+        <p>Submit inquiries or feedback to our team.</p>
+
+        <!-- Form without proper client-side validation requirements -->
+        <form action="/submit-contact" method="POST" id="contact-form">
+            <div class="form-group">
+                <label for="name">Your Name</label>
+                <input type="text" id="name" name="name" placeholder="John Doe">
+            </div>
+            
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <!-- Deliberate flaw: type="text" instead of email, no required attribute -->
+                <input type="text" id="email" name="email" placeholder="john@example.com">
+            </div>
+
+            <div class="form-group">
+                <label for="message">Message</label>
+                <textarea id="message" name="message" rows="4" placeholder="Your feedback..."></textarea>
+            </div>
+
+            <button type="submit" class="btn">Send Message</button>
+        </form>
+
+        <a href="/" class="back-link">← Return to Home</a>
+    </div>
+</body>
+</html>
