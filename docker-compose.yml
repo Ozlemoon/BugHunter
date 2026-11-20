@@ -1,0 +1,24 @@
+services:
+  bughunter:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"   # dashboard
+      - "127.0.0.1:8001:8001"   # demo API
+      - "127.0.0.1:8002:8002"   # demo web app
+    environment:
+      BUGHUNTER_API_TOKEN: ${BUGHUNTER_API_TOKEN:-}
+      BUGHUNTER_OLLAMA_URL: http://ollama:11434
+    volumes:
+      - reports:/app/reports
+    restart: unless-stopped
+
+  # Optional local LLM for document Q&A: docker compose --profile rag up
+  ollama:
+    image: ollama/ollama:0.6.8
+    profiles: ["rag"]
+    volumes:
+      - ollama:/root/.ollama
+
+volumes:
+  reports:
+  ollama:
