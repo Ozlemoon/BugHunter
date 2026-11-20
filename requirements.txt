@@ -26,3 +26,4 @@ pyyaml>=6.0.1
 
 # Local RAG vector store
 chromadb>=1.5.9,<2
+langchain-ollama>=1.1,<2

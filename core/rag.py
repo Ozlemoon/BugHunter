@@ -113,6 +113,11 @@ def main() -> None:
     search = commands.add_parser("search")
     search.add_argument("question")
     search.add_argument("--top-k", type=int, default=3)
+    ask = commands.add_parser("ask", help="Belgelerden doğrulanmış alıntılarla yanıt ver")
+    ask.add_argument("question")
+    ask.add_argument("--top-k", type=int, default=6)
+    ask.add_argument("--top-n", type=int, default=3)
+    ask.add_argument("--model", default="qwen3.5")
     args = parser.parse_args()
 
     try:
@@ -121,8 +126,13 @@ def main() -> None:
             for path in args.files:
                 count = store.index_file(path, args.chunk_size, args.overlap)
                 print(f"{path.name}: {count} belge parçası kaydedildi.")
-        else:
+        elif args.command == "search":
             print(json.dumps(store.search(args.question, args.top_k), ensure_ascii=False, indent=2))
+        else:
+            from core.rag_answer import answer_question
+
+            result = answer_question(store, args.question, args.top_k, args.top_n, args.model)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
     except (OSError, RuntimeError, ValueError) as error:
         parser.exit(1, f"Hata: {error}\n")
 
