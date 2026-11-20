@@ -5,9 +5,10 @@ evidence exploration, human approval gate, and regression verification.
 """
 
 import os
-import httpx
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
+
+import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -20,7 +21,6 @@ from core.models import (
     TargetType,
     TestCase,
     TestCriterion,
-    TestResult,
 )
 from core.patcher import CodePatcher, HumanApprovalGate
 from core.runner import TestRunner

@@ -136,6 +136,20 @@ def resolve_source_file(source_file: Optional[str], settings: Settings) -> Optio
     return str(path)
 
 
+def playground_source_for(target_url: str, target_type: TargetType, settings: Settings) -> Optional[str]:
+    """The bundled demo targets map to their own source files, so demos work without --source."""
+    from urllib.parse import urlparse
+
+    parsed = urlparse(target_url)
+    if parsed.hostname not in ("127.0.0.1", "localhost"):
+        return None
+    if target_type == TargetType.API and parsed.port == settings.playground_api_port:
+        return "playground/sample_api.py"
+    if target_type == TargetType.WEB and parsed.port == settings.playground_web_port:
+        return "playground/sample_web.py"
+    return None
+
+
 def summarize(run: HuntRun) -> RunSummary:
     by_criterion: Dict[str, Dict[str, int]] = {}
     for test, result in zip(run.tests, run.results):
@@ -210,6 +224,7 @@ class HuntSession:
         config: HuntConfig,
         on_result: Optional[Callable[[TestCase, TestResult], None]] = None,
         persist: bool = True,
+        on_plan: Optional[Callable[[List[TestCase]], None]] = None,
     ) -> HuntRun:
         """Plans and runs the suite, gathers evidence and drafts (unapproved) fixes."""
         source_file = resolve_source_file(config.source_file, self.settings)
@@ -217,6 +232,8 @@ class HuntSession:
             run = HuntRun(run_id=new_run_id(), started_at=datetime.now(timezone.utc), config=config, base_url="")
             with self._client() as client:
                 run.base_url, run.tests = self.plan(config, client)
+                if on_plan:
+                    on_plan(run.tests)
                 run.results = self.runner.run_suite(run.tests, client=client, on_result=on_result)
 
             for test, result in zip(run.tests, run.results):

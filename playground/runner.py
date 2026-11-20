@@ -14,6 +14,7 @@ from pathlib import Path
 import uvicorn
 
 from core.config import get_settings
+from core.console import configure_utf8
 
 PLAYGROUND_DIR = str(Path(__file__).resolve().parent)
 
@@ -32,18 +33,20 @@ def _serve(app_path: str, port: int, reload: bool) -> None:
 
 
 def run_api(port: int | None = None, reload: bool = True) -> None:
+    configure_utf8()  # also runs inside spawned child processes
     port = port or get_settings().playground_api_port
     print(f"🚀 Sample API target on http://127.0.0.1:{port}  (docs: /docs)")
     _serve("playground.sample_api:app", port, reload)
 
 
 def run_web(port: int | None = None, reload: bool = True) -> None:
+    configure_utf8()
     port = port or get_settings().playground_web_port
     print(f"🌐 Sample Web App target on http://127.0.0.1:{port}")
     _serve("playground.sample_web:app", port, reload)
 
 
-def run_all(reload: bool = True) -> None:
+def run_all(reload: bool = True) -> int:
     processes = [
         multiprocessing.Process(target=run_api, kwargs={"reload": reload}),
         multiprocessing.Process(target=run_web, kwargs={"reload": reload}),
@@ -58,8 +61,14 @@ def run_all(reload: bool = True) -> None:
         for process in processes:
             process.terminate()
         print("\n🛑 Stopped playground targets.")
+        return 0
+    failed = [p for p in processes if p.exitcode]
+    if failed:
+        print("✖ A playground target exited with an error (is the port already in use?).")
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
     choice = sys.argv[1] if len(sys.argv) > 1 else "all"
-    {"api": run_api, "web": run_web}.get(choice, run_all)()
+    configure_utf8()
+    sys.exit({"api": run_api, "web": run_web}.get(choice, run_all)() or 0)

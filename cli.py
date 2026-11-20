@@ -1,177 +1,275 @@
 """
-BugHunter AI — Rich Interactive CLI.
-Provides a terminal interface for running autonomous tests, inspecting defects,
-reviewing Unified Diffs, and granting human-in-the-loop approval.
+BugHunter AI — terminal interface.
+
+- `hunt`  : interactive run with diff review and a human approval prompt per fix
+- `scan`  : headless run for CI pipelines (reports + exit codes, never patches)
+- `runs`  : list the run history
+- `report`: export a stored run as JSON / JUnit / HTML
 """
 
-import argparse
-import os
-import sys
-from typing import Set
+from __future__ import annotations
 
+import argparse
+import sys
+from pathlib import Path
+from typing import Optional
+
+import httpx
 from rich.console import Console
 from rich.panel import Panel
+from rich.progress import BarColumn, MofNCompleteColumn, Progress, TextColumn
+from rich.prompt import Confirm
 from rich.syntax import Syntax
 from rich.table import Table
-from rich.prompt import Confirm
 
-from core.analyzer import BugAnalyzer
-from core.generator import TestGenerator
-from core.models import TargetType, TestCriterion
-from core.patcher import CodePatcher, HumanApprovalGate
-from core.runner import TestRunner
-from core.targets.api_target import ApiTargetParser
-from core.targets.web_target import WebTargetParser
-from core.verifier import RegressionVerifier
+from core import reporting
+from core.config import get_settings
+from core.engine import HuntConfig, HuntRun, HuntSession, playground_source_for
+from core.generator import ALL_CRITERIA
+from core.models import Severity, TargetType, TestCriterion
+from core.patcher import PatchConflictError
+from core.targets.api_target import SpecError
 
 console = Console()
 
-
-def display_banner():
-    banner_text = """[bold cyan]
-██████╗ ██╗   ██╗ ██████╗ ██╗  ██╗██╗   ██╗███╗   ██╗████████╗███████╗██████╗ 
-██╔══██╗██║   ██║██╔════╝ ██║  ██║██║   ██║████╗  ██║╚══██╔══╝██╔════╝██╔══██╗
-██████╔╝██║   ██║██║  ███╗███████║██║   ██║██╔██╗ ██║   ██║   █████╗  ██████╔╝
-██╔══██╗██║   ██║██║   ██║██╔══██║██║   ██║██║╚██╗██║   ██║   ██╔══╝  ██╔══██╗
-██████╔╝╚██████╔╝╚██████╔╝██║  ██║╚██████╔╝██║ ╚████║   ██║   ███████╗██║  ██║
-╚═════╝  ╚═════╝  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝   ╚══════╝╚═╝  ╚═╝
-[/bold cyan]
-[bold white]İnsan Onaylı Otonom Yazılım Test ve Hata Analiz Ajanı (v1.0.0)[/bold white]
-[italic dim]Test Et ➔ Araştır ➔ Kanıtla ➔ Onay Al ➔ Düzelt ➔ Yeniden Test Et[/italic dim]
-"""
-    console.print(Panel(banner_text, border_style="cyan"))
+EXIT_OK, EXIT_FINDINGS, EXIT_ERROR = 0, 1, 2
+SEVERITY_STYLE = {"CRITICAL": "bold white on red", "HIGH": "bold red", "MEDIUM": "yellow", "LOW": "dim"}
 
 
-def run_cli():
-    display_banner()
+def add_target_arguments(parser: argparse.ArgumentParser) -> None:
+    settings = get_settings()
+    parser.add_argument("--url", default=f"http://127.0.0.1:{settings.playground_api_port}/openapi.json",
+                        help="OpenAPI/Swagger URL or file (API) or page URL (WEB)")
+    parser.add_argument("--type", choices=["API", "WEB"], default="API", help="Target type")
+    parser.add_argument("--criteria", default=",".join(sorted(c.value for c in ALL_CRITERIA)),
+                        help="Comma separated: FUNCTIONAL,BOUNDARY,SECURITY,PERFORMANCE,WEB_VALIDATION")
+    parser.add_argument("--sla", type=float, default=settings.default_sla_ms, help="SLA threshold in ms")
+    parser.add_argument("--auth", default=None,
+                        help='Authorization header for functional checks, e.g. "Bearer <token>"')
+    parser.add_argument("--crawl-pages", type=int, default=5, help="WEB: max same-origin pages to crawl")
 
-    parser = argparse.ArgumentParser(description="BugHunter AI CLI Runner")
-    parser.add_argument("--url", type=str, default="http://127.0.0.1:8001/openapi.json", help="Target URL or spec")
-    parser.add_argument("--type", type=str, choices=["API", "WEB"], default="API", help="Target type (API or WEB)")
-    parser.add_argument("--sla", type=float, default=500.0, help="SLA response time threshold in ms")
-    args = parser.parse_args()
 
-    target_url = args.url
-    target_type = TargetType[args.type]
+def build_config(args: argparse.Namespace, with_source: bool) -> HuntConfig:
+    try:
+        criteria = [TestCriterion(c.strip().upper()) for c in args.criteria.split(",") if c.strip()]
+    except ValueError as error:
+        raise SystemExit(f"Unknown criterion: {error}") from error
+    target_type = TargetType(args.type)
+    source = getattr(args, "source", None) if with_source else None
+    if with_source and source is None:
+        source = playground_source_for(args.url, target_type, get_settings())
+    return HuntConfig(
+        target_url=args.url,
+        target_type=target_type,
+        criteria=criteria,
+        sla_threshold_ms=args.sla,
+        auth_header=args.auth,
+        source_file=source,
+        crawl_pages=args.crawl_pages,
+    )
 
-    console.print(f"[bold green]▶ Hedef:[/bold green] {target_url} [dim]({target_type.value})[/dim]")
-    console.print(f"[bold green]▶ Kriterler:[/bold green] FUNCTIONAL, BOUNDARY, SECURITY, PERFORMANCE, WEB_VALIDATION")
-    console.print(f"[bold green]▶ SLA Eşiği:[/bold green] {args.sla} ms\n")
 
-    # Step 1: Parse
-    console.print("[yellow][1/6] 🔍 Hedef analiz ediliyor ve şema okunuyor...[/yellow]")
-    if target_type == TargetType.API:
-        api_parser = ApiTargetParser(target_url)
-        endpoints = api_parser.parse()
-        base_url = target_url.rsplit("/", 1)[0]
-        generator = TestGenerator(base_url=base_url, sla_threshold_ms=args.sla)
-        tests = generator.generate_api_tests(endpoints)
-    else:
-        web_parser = WebTargetParser(target_url)
-        page_spec = web_parser.parse()
-        generator = TestGenerator(base_url=target_url, sla_threshold_ms=args.sla)
-        tests = generator.generate_web_tests(page_spec)
+def execute(session: HuntSession, config: HuntConfig, quiet: bool = False) -> Optional[HuntRun]:
+    """Runs a hunt with a progress bar; returns None after printing a friendly error."""
+    try:
+        if quiet:
+            return session.start(config)
+        with Progress(TextColumn("[cyan]{task.description}"), BarColumn(), MofNCompleteColumn(),
+                      console=console, transient=True) as progress:
+            task = progress.add_task("Hedef analiz ediliyor…", total=None)
 
-    console.print(f"[green]✔ [bold]{len(tests)}[/bold] otonom test senaryosu üretildi.[/green]\n")
+            def on_result(test, result):
+                progress.update(task, description=f"{test.method} {test.endpoint or test.url}"[:60], advance=1)
 
-    # Step 2: Run Tests
-    console.print("[yellow][2/6] 🚀 Testler hedefe karşı koşturuluyor...[/yellow]")
-    runner = TestRunner()
-    results = runner.run_suite(tests)
+            def on_plan(tests):
+                progress.update(task, total=len(tests), description="Testler koşturuluyor…")
 
-    # Display Test Results Table
-    results_table = Table(title="Test Koşum Sonuçları", show_header=True, header_style="bold magenta")
-    results_table.add_column("Durum", width=12)
-    results_table.add_column("Test ID", width=28)
-    results_table.add_column("Metot & URL", width=34)
-    results_table.add_column("Yanıt", width=8)
-    results_table.add_column("Süre", width=10)
+            return session.start(config, on_result=on_result, on_plan=on_plan)
+    except httpx.RequestError as error:
+        console.print(f"[red]✖ Hedefe bağlanılamadı:[/red] {error}. "
+                      "Demo hedefleri için: [bold]python main.py playground[/bold]")
+    except httpx.HTTPStatusError as error:
+        console.print(f"[red]✖ Hedef HTTP {error.response.status_code} döndürdü:[/red] {error.request.url}")
+    except (SpecError, ValueError, OSError) as error:
+        console.print(f"[red]✖ {error}[/red]")
+    return None
 
-    test_map = {t.id: t for t in tests}
-    failed_tests = []
 
-    for r in results:
-        t = test_map[r.test_id]
-        status_str = "[bold green]✔ GEÇTİ[/bold green]" if r.passed else "[bold red]✖ HATA[/bold red]"
-        results_table.add_row(
-            status_str,
-            r.test_id,
-            f"{t.method} {t.url[:30]}",
-            str(r.status_code or "-"),
-            f"{r.elapsed_ms:.1f}ms"
-        )
-        if not r.passed:
-            failed_tests.append((t, r))
+def print_results(run: HuntRun) -> None:
+    table = Table(title=f"Test sonuçları · {run.run_id}", header_style="bold magenta", expand=True)
+    table.add_column("Durum", no_wrap=True)
+    table.add_column("Kriter", no_wrap=True)
+    table.add_column("İstek", overflow="fold")
+    table.add_column("HTTP", justify="right")
+    table.add_column("Süre", justify="right", no_wrap=True)
+    results = {r.test_id: r for r in run.results}
+    for test in run.tests:
+        r = results[test.id]
+        status = "[green]✔ GEÇTİ[/green]" if r.passed else "[red]✖ KALDI[/red]"
+        table.add_row(status, test.criterion.value, f"{test.method} {test.url}",
+                      str(r.status_code or "-"), f"{r.elapsed_ms:.0f} ms")
+    console.print(table)
+    s = run.summary
+    sev = ", ".join(f"{k}: {v}" for k, v in sorted(s.by_severity.items(), key=lambda kv: -Severity(kv[0]).rank))
+    console.print(f"[bold]Özet:[/bold] {s.total_tests} test · [green]{s.passed_tests} geçti[/green] · "
+                  f"[red]{s.failed_tests} kaldı[/red]" + (f" · {sev}" if sev else ""))
 
-    console.print(results_table)
 
-    pass_count = sum(1 for r in results if r.passed)
-    fail_count = len(failed_tests)
-    console.print(f"\n[bold]Özet:[/bold] [green]{pass_count} Başarılı[/green], [red]{fail_count} Başarısız[/red]\n")
+def print_finding(index: int, finding) -> None:
+    e = finding.evidence
+    console.print(f"\n[{SEVERITY_STYLE[e.severity.value]}] {e.severity.value} [/] [bold]#{index} {e.title}[/bold]")
+    console.print(f"  [dim]{e.method} {e.target_url}[/dim]")
+    console.print(f"  [bold]Kök neden:[/bold] {e.root_cause_hypothesis}")
+    console.print(f"  [bold]Gerçekleşen:[/bold] {e.actual_behavior[:300]}")
 
-    if not failed_tests:
-        console.print("[bold green]🎉 Harika! Hedef sistem belirlenen tüm kriterleri başarıyla geçti.[/bold green]")
-        return
 
-    # Step 3: Analyze & Evidence Collection
-    console.print("[yellow][3/6] 🔬 Başarısız testler izole ediliyor ve kanıt toplanıyor...[/yellow]")
-    analyzer = BugAnalyzer()
-    gate = HumanApprovalGate()
-    patcher = CodePatcher(approval_gate=gate)
-    verifier = RegressionVerifier()
+# ---------------------------------------------------------------------------
+# Commands
+# ---------------------------------------------------------------------------
 
-    target_file = os.path.abspath("playground/sample_api.py" if target_type == TargetType.API else "playground/sample_web.py")
+def cmd_hunt(args: argparse.Namespace) -> int:
+    console.print(Panel.fit("[bold cyan]BugHunter AI[/bold cyan] · İnsan onaylı otonom test ajanı\n"
+                            "[dim]Test et → Kanıtla → Onay al → Düzelt → Yeniden test et[/dim]",
+                            border_style="cyan"))
+    config = build_config(args, with_source=True)
+    console.print(f"[green]▶ Hedef:[/green] {config.target_url} [dim]({config.target_type.value})[/dim]")
+    console.print(f"[green]▶ Kriterler:[/green] {', '.join(c.value for c in config.criteria)}")
+    if config.source_file:
+        console.print(f"[green]▶ Düzeltme hedefi:[/green] {config.source_file}")
 
-    for idx, (failed_test, failed_result) in enumerate(failed_tests, 1):
-        evidence = analyzer.analyze_failure(failed_test, failed_result)
-        console.print(f"\n[bold red]━━━ Hata #{idx}: {evidence.title} ({evidence.severity}) ━━━[/bold red]")
-        console.print(f"[bold]Kök Neden Hipotezi:[/bold] {evidence.root_cause_hypothesis}")
-        console.print(f"[bold]Beklenen:[/bold] {evidence.expected_behavior}")
-        console.print(f"[bold]Gerçekleşen:[/bold] {evidence.actual_behavior}")
+    session = HuntSession()
+    run = execute(session, config)
+    if run is None:
+        return EXIT_ERROR
+    print_results(run)
+    if not run.findings:
+        console.print("[bold green]🎉 Hedef seçilen tüm kriterleri geçti.[/bold green]")
+        return EXIT_OK
 
-        # Step 4: Propose Fix
-        proposal = patcher.generate_fix(evidence, target_file=target_file)
-        console.print(f"\n[bold cyan]📝 Önerilen Kod Düzeltmesi (Unified Diff) ➔ {target_file}[/bold cyan]")
-        syntax = Syntax(proposal.unified_diff, "diff", theme="monokai", line_numbers=False)
-        console.print(Panel(syntax, title=f"Fix Proposal {proposal.fix_id}"))
+    for index, finding in enumerate(run.findings, 1):
+        print_finding(index, finding)
+        proposal = finding.proposal
+        if proposal is None or not proposal.patch_available:
+            console.print("  [dim]Otomatik düzeltme yok; kanıt raporda.[/dim]")
+            continue
+        console.print(Panel(Syntax(proposal.unified_diff, "diff", theme="ansi_dark"),
+                            title=f"Önerilen düzeltme · {proposal.rule}", subtitle=proposal.explanation))
+        if not args.yes and not Confirm.ask("[bold yellow]🛡️ Bu düzeltmeyi uygulamayı onaylıyor musunuz?[/bold yellow]",
+                                                  default=False):
+            session.reject(run.run_id, proposal.fix_id)
+            console.print("  [yellow]✖ Reddedildi; kaynak koda dokunulmadı.[/yellow]")
+            continue
+        try:
+            with console.status("Yama uygulanıyor ve regresyon testleri koşuyor…"):
+                report = session.approve(run.run_id, proposal.fix_id)
+        except (PatchConflictError, PermissionError, FileNotFoundError) as error:
+            console.print(f"  [red]✖ Yama uygulanamadı: {error}[/red]")
+            continue
+        style = "green" if report.verdict == "CLEAN_FIX" else "red"
+        details = "\n".join(report.regressions_detected)
+        console.print(Panel(f"{report.summary}\nBaşarılı testler: {report.before_pass_count} → {report.after_pass_count}"
+                            + (f"\n{details}" if details else ""),
+                            title=f"Regresyon doğrulaması: {report.verdict}", border_style=style))
 
-        # Step 5: STRICT HUMAN APPROVAL GATE
-        console.print("\n[bold yellow]🛡️ [HUMAN-IN-THE-LOOP ON AY KİLİDİ][/bold yellow]")
-        approved = Confirm.ask(f"[bold]Bu kod düzeltmesini {os.path.basename(target_file)} dosyasına uygulamayı onaylıyor musunuz?[/bold]", default=True)
+    path = reporting.write(run, "html", session.settings.reports_dir / f"{run.run_id}.html")
+    console.print(f"\n[cyan]✨ Döngü tamamlandı. HTML rapor:[/cyan] {path}")
+    return EXIT_OK
 
-        if approved:
-            gate.approve_fix(proposal.fix_id)
-            gate.apply_patch(proposal.fix_id, create_backup=True)
-            console.print(f"[green]✔ Düzeltme uygulandı! (Yedek: {target_file}.bughunter.bak)[/green]")
 
-            # Step 6: Regression Verification
-            console.print("[yellow][6/6] 🔄 Regresyon doğrulaması koşturuluyor...[/yellow]")
-            report = verifier.verify(
-                runner=runner,
-                client=None,
-                all_tests=tests,
-                target_test=failed_test,
-                before_results=results,
-                proposal=proposal,
-                gate=gate,
-                auto_rollback_on_regression=True
-            )
+def cmd_scan(args: argparse.Namespace) -> int:
+    """Headless: no prompts, never modifies code. Exit 1 when findings reach --fail-on."""
+    config = build_config(args, with_source=False)
+    session = HuntSession()
+    run = execute(session, config, quiet=args.quiet)
+    if run is None:
+        return EXIT_ERROR
 
-            if report.verdict == "CLEAN_FIX":
-                console.print(Panel(f"[bold green]{report.summary}[/bold green]\n"
-                                    f"Başarılı Testler: {report.before_pass_count} ➔ [bold green]{report.after_pass_count}[/bold green]\n"
-                                    f"Regresyon / Yan Etki: [bold green]0 (Sıfır)[/bold green]",
-                                    title="Regresyon Doğrulama Raporu: TEMİZ", border_style="green"))
-            else:
-                console.print(Panel(f"[bold red]{report.summary}[/bold red]\n"
-                                    f"Yan Etkiler: {', '.join(report.regressions_detected)}",
-                                    title="Regresyon Tespit Edildi", border_style="red"))
-        else:
-            gate.reject_fix(proposal.fix_id)
-            console.print("[yellow]✖ Düzeltme kullanıcı tarafından reddedildi. Kaynak koda dokunulmadı.[/yellow]")
+    for fmt, target in (("junit", args.junit), ("html", args.html), ("json", args.json)):
+        if target:
+            path = reporting.write(run, fmt, Path(target))
+            if not args.quiet:
+                console.print(f"[dim]{fmt.upper()} rapor → {path}[/dim]")
+    if not args.quiet:
+        print_results(run)
+        for index, finding in enumerate(run.findings, 1):
+            print_finding(index, finding)
 
-    console.print("\n[bold cyan]✨ BugHunter döngüsü tamamlandı.[/bold cyan]")
+    if args.fail_on == "NEVER":
+        return EXIT_OK
+    failed = run.has_findings_at_or_above(Severity(args.fail_on))
+    if not args.quiet:
+        verdict = "[red]BAŞARISIZ[/red]" if failed else "[green]BAŞARILI[/green]"
+        console.print(f"\nEşik {args.fail_on}: {verdict}")
+    return EXIT_FINDINGS if failed else EXIT_OK
+
+
+def cmd_runs(args: argparse.Namespace) -> int:
+    session = HuntSession()
+    runs = session.store.list(limit=args.limit)
+    if not runs:
+        console.print("Henüz kayıtlı çalışma yok.")
+        return EXIT_OK
+    table = Table(header_style="bold")
+    for column in ("Çalışma", "Tarih (UTC)", "Tür", "Hedef", "Test", "Kalan", "En yüksek"):
+        table.add_column(column, overflow="fold")
+    for run in runs:
+        worst = run.worst_severity()
+        table.add_row(run.run_id, f"{run.started_at:%Y-%m-%d %H:%M}", run.config.target_type.value,
+                      run.config.target_url, str(run.summary.total_tests), str(run.summary.failed_tests),
+                      worst.value if worst else "-")
+    console.print(table)
+    return EXIT_OK
+
+
+def cmd_report(args: argparse.Namespace) -> int:
+    session = HuntSession()
+    run = session.store.load(args.run_id)
+    if run is None:
+        console.print(f"[red]Çalışma bulunamadı: {args.run_id}[/red]")
+        return EXIT_ERROR
+    extension = reporting.FORMATS[args.format][1]
+    output = Path(args.output) if args.output else session.settings.reports_dir / f"{run.run_id}.{extension}"
+    console.print(f"Rapor yazıldı: {reporting.write(run, args.format, output)}")
+    return EXIT_OK
+
+
+def register(commands) -> None:
+    hunt = commands.add_parser("hunt", aliases=["cli"], help="Interactive hunt with human approval of fixes")
+    add_target_arguments(hunt)
+    hunt.add_argument("--source", default=None, help="Source file fixes are proposed against")
+    hunt.add_argument("--yes", action="store_true", default=False,
+                      help="Approve every available fix without asking (use only on disposable code)")
+    hunt.set_defaults(handler=cmd_hunt)
+
+    scan = commands.add_parser("scan", help="Headless scan for CI: reports + exit code, never patches code")
+    add_target_arguments(scan)
+    scan.add_argument("--junit", help="Write JUnit XML to this path")
+    scan.add_argument("--html", help="Write the HTML report to this path")
+    scan.add_argument("--json", help="Write the JSON report to this path")
+    scan.add_argument("--fail-on", default="HIGH", choices=["CRITICAL", "HIGH", "MEDIUM", "LOW", "NEVER"],
+                      help="Exit 1 when a finding has at least this severity (default: HIGH)")
+    scan.add_argument("--quiet", action="store_true", help="Only print errors")
+    scan.set_defaults(handler=cmd_scan)
+
+    runs = commands.add_parser("runs", help="List stored runs")
+    runs.add_argument("--limit", type=int, default=20)
+    runs.set_defaults(handler=cmd_runs)
+
+    report = commands.add_parser("report", help="Export a stored run")
+    report.add_argument("run_id")
+    report.add_argument("--format", choices=sorted(reporting.FORMATS), default="html")
+    report.add_argument("-o", "--output", help="Output path (default: reports/<run_id>.<ext>)")
+    report.set_defaults(handler=cmd_report)
+
+
+def run_cli(argv: Optional[list] = None) -> int:
+    """Backwards-compatible entry point: `python cli.py --url ...` runs an interactive hunt."""
+    parser = argparse.ArgumentParser(description="BugHunter AI CLI")
+    add_target_arguments(parser)
+    parser.add_argument("--source", default=None)
+    parser.add_argument("--yes", action="store_true", default=False)
+    return cmd_hunt(parser.parse_args(argv))
 
 
 if __name__ == "__main__":
-    run_cli()
+    sys.exit(run_cli())
