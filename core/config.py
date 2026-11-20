@@ -78,7 +78,7 @@ class Settings:
     rag_embed_model: str = "embeddinggemma"
 
     @classmethod
-    def from_env(cls) -> "Settings":
+    def from_env(cls) -> Settings:
         _load_dotenv(Path.cwd() / ".env")
         roots = _env("PATCH_ROOTS", "")
         return cls(

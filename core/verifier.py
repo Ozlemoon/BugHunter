@@ -5,6 +5,7 @@ that no regressions were introduced to the existing test suite.
 """
 
 from typing import Dict, List, Optional
+
 from core.models import FixProposal, RegressionReport, TestCase, TestResult
 from core.patcher import HumanApprovalGate
 from core.runner import TestRunner
@@ -23,7 +24,8 @@ class RegressionVerifier:
         before_results: List[TestResult],
         proposal: FixProposal,
         gate: Optional[HumanApprovalGate] = None,
-        auto_rollback_on_regression: bool = False
+        auto_rollback_on_regression: bool = False,
+        auto_rollback_on_failure: bool = False,
     ) -> RegressionReport:
         """
         Executes regression verification cycle:
@@ -58,12 +60,15 @@ class RegressionVerifier:
         after_fail = sum(1 for r in after_results if not r.passed)
 
         # 3. Determine verdict
+        rolled_back = False
         if not bug_fixed:
             verdict = "FIX_UNSUCCESSFUL"
             summary = (
                 f"❌ The applied patch did not resolve the defect in {target_test.id}. "
-                f"Target test is still failing."
+                f"Target test is still failing: {'; '.join(target_res.failed_assertions)}"
             )
+            if auto_rollback_on_failure and gate:
+                rolled_back = gate.rollback(proposal.target_file)
         elif regressions:
             verdict = "REGRESSION_DETECTED"
             summary = (
@@ -71,8 +76,7 @@ class RegressionVerifier:
                 f"in other endpoints!"
             )
             if auto_rollback_on_regression and gate:
-                gate.rollback(proposal.target_file)
-                summary += " [Auto-Rollback Triggered]"
+                rolled_back = gate.rollback(proposal.target_file)
         else:
             verdict = "CLEAN_FIX"
             summary = (
@@ -90,5 +94,6 @@ class RegressionVerifier:
             after_fail_count=after_fail,
             regressions_detected=regressions,
             verdict=verdict,
-            summary=summary
+            summary=summary + (" [Auto-Rollback Triggered]" if rolled_back else ""),
+            rolled_back=rolled_back,
         )

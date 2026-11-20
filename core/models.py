@@ -6,7 +6,19 @@ bug evidence, and fix proposals.
 
 from enum import Enum
 from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
+
+
+class Severity(str, Enum):
+    CRITICAL = "CRITICAL"
+    HIGH = "HIGH"
+    MEDIUM = "MEDIUM"
+    LOW = "LOW"
+
+    @property
+    def rank(self) -> int:
+        return {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}[self.value]
 
 
 class TargetType(str, Enum):
@@ -32,6 +44,7 @@ class AssertionType(str, Enum):
     BODY_MATCHES_SCHEMA = "BODY_MATCHES_SCHEMA"
     HEADER_EXISTS = "HEADER_EXISTS"
     NO_SERVER_ERROR = "NO_SERVER_ERROR"  # Status code must not be 500-599
+    NOT_REFLECTED_IN_HTML = "NOT_REFLECTED_IN_HTML"  # Probe string must not echo unescaped in HTML
 
 
 class TestAssertion(BaseModel):
@@ -50,12 +63,14 @@ class TestCase(BaseModel):
     description: str
     method: str = "GET"                 # GET, POST, PUT, DELETE, etc.
     url: str                            # Full URL or path
+    endpoint: Optional[str] = None      # Templated path, e.g. /users/{user_id}/profile
     headers: Dict[str, str] = Field(default_factory=dict)
     query_params: Dict[str, Any] = Field(default_factory=dict)
     payload: Optional[Any] = None       # JSON dict, form data, or raw body
     is_form_data: bool = False
     assertions: List[TestAssertion] = Field(default_factory=list)
     tags: List[str] = Field(default_factory=list)
+    severity: Optional[Severity] = None  # Overrides the analyzer's default severity
 
 
 # --- Parsed Target Specifications ---
@@ -66,6 +81,7 @@ class ParameterSpec(BaseModel):
     required: bool = False
     param_type: str = "string"
     default: Optional[Any] = None
+    example: Optional[Any] = None
     description: Optional[str] = None
 
 
@@ -76,7 +92,10 @@ class EndpointSpec(BaseModel):
     description: Optional[str] = None
     parameters: List[ParameterSpec] = Field(default_factory=list)
     request_body_schema: Optional[Dict[str, Any]] = None
+    request_body_required: bool = False
     responses: Dict[str, Any] = Field(default_factory=dict)
+    success_response_schema: Optional[Dict[str, Any]] = None
+    requires_auth: bool = False         # Operation declares a security requirement
     tags: List[str] = Field(default_factory=list)
 
 
@@ -106,6 +125,7 @@ class WebPageSpec(BaseModel):
     links: List[WebLinkSpec] = Field(default_factory=list)
     assets: List[WebLinkSpec] = Field(default_factory=list)
     forms: List[WebFormSpec] = Field(default_factory=list)
+    response_headers: Dict[str, str] = Field(default_factory=dict)
 
 
 # --- Test Execution and Bug Evidence Models ---
@@ -129,12 +149,24 @@ class BugEvidence(BaseModel):
     criterion: TestCriterion
     target_url: str
     method: str
+    test_id: Optional[str] = None
+    endpoint: Optional[str] = None      # Templated path used to match fix rules
+    status_code: Optional[int] = None
+    tags: List[str] = Field(default_factory=list)
     payload: Optional[Any] = None
     expected_behavior: str
     actual_behavior: str
     reproduction_code: str              # Minimal standalone Python or curl script
     root_cause_hypothesis: str
-    severity: str = "MEDIUM"            # CRITICAL, HIGH, MEDIUM, LOW
+    severity: Severity = Severity.MEDIUM
+
+
+class FixStatus(str, Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    APPLIED = "APPLIED"
+    REJECTED = "REJECTED"
+    ROLLED_BACK = "ROLLED_BACK"
 
 
 class FixProposal(BaseModel):
@@ -145,6 +177,10 @@ class FixProposal(BaseModel):
     explanation: str
     unified_diff: str
     approved: bool = False
+    patch_available: bool = True        # False when no safe automatic fix is known
+    rule: Optional[str] = None          # Name of the fix rule that produced the patch
+    source_sha256: Optional[str] = None  # Hash of target_file when the diff was produced
+    status: FixStatus = FixStatus.PENDING
 
 
 class RegressionReport(BaseModel):
@@ -159,4 +195,5 @@ class RegressionReport(BaseModel):
     regressions_detected: List[str] = Field(default_factory=list)
     verdict: str                        # CLEAN_FIX, REGRESSION_DETECTED, FIX_UNSUCCESSFUL
     summary: str
+    rolled_back: bool = False
 
