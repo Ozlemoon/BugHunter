@@ -19,13 +19,7 @@ class EvidenceSelection(BaseModel):
     source_ids: list[str]
 
 
-def answer_question(
-    store: DocumentIndex, question: str, top_k: int, top_n: int, model: str
-) -> dict:
-    if not 1 <= top_n <= top_k:
-        raise ValueError("1 ≤ Top-N ≤ Top-K olmalı.")
-
-    passages = store.search(question, top_k)
+def rerank_passages(question: str, passages: list[dict]) -> list[dict]:
     question_words = set(re.findall(r"[^\W\d_]+", question.lower()))
 
     def relevance(passage: dict) -> float:
@@ -33,7 +27,16 @@ def answer_question(
         coverage = len(question_words & words) / max(1, len(question_words))
         return 0.8 * passage["similarity"] + 0.2 * coverage
 
-    ranked = sorted(passages, key=relevance, reverse=True)[:top_n]
+    return sorted(passages, key=relevance, reverse=True)
+
+
+def answer_question(
+    store: DocumentIndex, question: str, top_k: int, top_n: int, model: str
+) -> dict:
+    if not 1 <= top_n <= top_k:
+        raise ValueError("1 ≤ Top-N ≤ Top-K olmalı.")
+
+    ranked = rerank_passages(question, store.search(question, top_k))[:top_n]
     sources = {f"K{index}": passage for index, passage in enumerate(ranked, start=1)}
     insufficient = {"answer": "Belgelerde yeterli kaynak bulunamadı.", "sources": {}}
     if not sources:

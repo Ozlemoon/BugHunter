@@ -60,3 +60,12 @@ class RagResilienceTests(TestCase):
             invoke.return_value = {"parsed": None}
             with self.assertRaisesRegex(RuntimeError, "geçerli bir kaynak listesi"):
                 answer_question(store, "Form?", 3, 1, "local")
+
+
+def test_rerank_prefers_passages_covering_question_words():
+    from core.rag_answer import rerank_passages
+
+    unrelated = {"text": "Shipping takes three days.", "similarity": 0.82}
+    matching = {"text": "The contact form shows a confirmation.", "similarity": 0.80}
+    ranked = rerank_passages("What does the contact form show?", [unrelated, matching])
+    assert ranked[0] is matching
