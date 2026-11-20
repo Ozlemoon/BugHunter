@@ -195,10 +195,65 @@
                 </div>
             </div>
         </section>
+        <section aria-labelledby="rag-heading" class="mt-8 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 id="rag-heading" class="text-base font-bold text-slate-900">Proje belgelerine sor</h2>
+            <form id="rag-form" class="mt-4 space-y-3">
+                <label for="rag-question" class="block text-sm font-medium text-slate-700">Sorunuz</label>
+                <textarea id="rag-question" maxlength="1000" rows="2" required
+                          placeholder="İletişim formu gönderilince ne gösterilmeli?"
+                          class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></textarea>
+                <button id="rag-submit" type="submit"
+                        class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                    Kaynaklarda ara
+                </button>
+            </form>
+            <div aria-live="polite" class="mt-4 text-sm text-slate-700">
+                <p id="rag-answer" class="whitespace-pre-wrap"></p>
+                <ul id="rag-sources" aria-label="Kaynaklar" class="mt-2 space-y-1 font-medium"></ul>
+            </div>
+        </section>
     </main>
 
     <!-- JavaScript Controller -->
     <script>
+        document.getElementById('rag-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const question = document.getElementById('rag-question').value.trim();
+            const answer = document.getElementById('rag-answer');
+            const sources = document.getElementById('rag-sources');
+            const button = document.getElementById('rag-submit');
+            sources.replaceChildren();
+            if (!question) {
+                answer.textContent = 'Bir soru yazın.';
+                return;
+            }
+            button.disabled = true;
+            answer.textContent = 'Belgeler inceleniyor…';
+            try {
+                const response = await fetch('/api/rag/ask', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({question})
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    answer.textContent = typeof result.detail === 'string'
+                        ? result.detail : 'Belge yanıtı alınamadı.';
+                    return;
+                }
+                answer.textContent = result.answer;
+                for (const [label, source] of Object.entries(result.sources)) {
+                    const item = document.createElement('li');
+                    item.textContent = `[${label}] ${source.filename} · Bölüm ${source.chunk}`;
+                    sources.appendChild(item);
+                }
+            } catch {
+                answer.textContent = 'Panel sunucusuna ulaşılamadı. Tekrar deneyin.';
+            } finally {
+                button.disabled = false;
+            }
+        });
+
         function setTarget(url, type) {
             document.getElementById('target-url').value = url;
             document.getElementById('target-type').value = type;

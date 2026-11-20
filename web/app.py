@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, Set
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from core.analyzer import BugAnalyzer
 from core.generator import TestGenerator
@@ -64,10 +64,33 @@ class ApproveRequest(BaseModel):
     fix_id: str
 
 
+class RagQuestion(BaseModel):
+    question: str = Field(min_length=1, max_length=1000)
+
+
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
     """Renders the main BugHunter interactive dashboard."""
     return templates.TemplateResponse(request=request, name="dashboard.html")
+
+
+@app.post("/api/rag/ask")
+def ask_documents(payload: RagQuestion):
+    from core.rag import DocumentIndex
+    from core.rag_answer import answer_question
+
+    question = payload.question.strip()
+    if not question:
+        raise HTTPException(status_code=422, detail="Bir soru yazın.")
+
+    try:
+        store = DocumentIndex(Path("run_artifacts/rag"))
+        return answer_question(store, question, top_k=6, top_n=3, model="qwen3.5")
+    except RuntimeError as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Belge yanıtı alınamadı. Ollama'nın çalıştığını kontrol edip tekrar deneyin.",
+        ) from error
 
 
 @app.post("/api/run-hunt")
