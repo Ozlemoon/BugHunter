@@ -60,11 +60,15 @@ def answer_question(
             ),
             ("human", json.dumps(payload, ensure_ascii=False)),
         ])
+    except httpx.TimeoutException as error:
+        raise RuntimeError("Ollama kaynak seçimini zamanında tamamlayamadı.") from error
     except (httpx.HTTPError, ResponseError, ConnectionError) as error:
         raise RuntimeError(f"Ollama yanıt üretirken hata verdi: {error}") from error
 
     selection = result["parsed"]
-    if not selection or not selection.source_ids:
+    if selection is None:
+        raise RuntimeError("Ollama geçerli bir kaynak listesi döndürmedi.")
+    if not selection.source_ids:
         return insufficient
 
     lines = []

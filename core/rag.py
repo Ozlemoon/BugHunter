@@ -32,6 +32,10 @@ class DocumentIndex:
             if len(vectors) != len(texts) or any(not vector for vector in vectors):
                 raise ValueError("Beklenmeyen vektör sayısı veya boş vektör.")
             return vectors
+        except httpx.TimeoutException as error:
+            raise RuntimeError(
+                "Ollama belge veya soru vektörünü zamanında üretemedi."
+            ) from error
         except httpx.RequestError as error:
             raise RuntimeError(f"Yerel Ollama bağlantısı başarısız: {error}") from error
         except httpx.HTTPStatusError as error:
