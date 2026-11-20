@@ -24,13 +24,21 @@ class SpecError(ValueError):
 class ApiTargetParser:
     """Parses OpenAPI and Swagger specifications into standardized EndpointSpec models."""
 
-    def __init__(self, spec_source: str, timeout: float = 10.0, headers: Optional[Dict[str, str]] = None):
+    def __init__(
+        self,
+        spec_source: str,
+        timeout: float = 10.0,
+        headers: Optional[Dict[str, str]] = None,
+        client: Optional[httpx.Client] = None,
+    ):
         """
         :param spec_source: URL (http/https) or local filepath (.json, .yaml, .yml)
+        :param client: optional pre-configured HTTP client (not closed by the parser)
         """
         self.spec_source = spec_source
         self.timeout = timeout
         self.headers = headers or {}
+        self.client = client
         self.raw_spec: Dict[str, Any] = {}
         self.endpoints: List[EndpointSpec] = []
 
@@ -41,10 +49,13 @@ class ApiTargetParser:
     def load_spec(self) -> Dict[str, Any]:
         """Loads and parses the specification from remote URL or local file."""
         if self.is_remote:
-            with httpx.Client(timeout=self.timeout, headers=self.headers) as client:
-                resp = client.get(self.spec_source)
-                resp.raise_for_status()
-                content = resp.text
+            if self.client is not None:
+                resp = self.client.get(self.spec_source, headers=self.headers)
+            else:
+                with httpx.Client(timeout=self.timeout, headers=self.headers) as client:
+                    resp = client.get(self.spec_source)
+            resp.raise_for_status()
+            content = resp.text
         else:
             with open(self.spec_source, encoding="utf-8") as f:
                 content = f.read()

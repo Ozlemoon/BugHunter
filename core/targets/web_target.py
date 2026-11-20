@@ -3,7 +3,8 @@ Web Application & Website Target Parser.
 Analyzes HTML pages, extracting forms, links, scripts, and media assets.
 """
 
-from typing import Dict, Optional
+from contextlib import contextmanager
+from typing import Dict, Iterator, Optional
 from urllib.parse import urldefrag, urljoin, urlparse
 
 import httpx
@@ -17,18 +18,33 @@ SKIPPED_SCHEMES = ("javascript:", "mailto:", "tel:", "data:", "#")
 class WebTargetParser:
     """Extracts testable components from HTML web pages."""
 
-    def __init__(self, target_url: str, timeout: float = 10.0, headers: Optional[Dict[str, str]] = None):
+    def __init__(
+        self,
+        target_url: str,
+        timeout: float = 10.0,
+        headers: Optional[Dict[str, str]] = None,
+        client: Optional[httpx.Client] = None,
+    ):
         self.target_url = target_url
         self.timeout = timeout
         self.headers = headers or {}
+        self.client = client
         self.raw_html: str = ""
         self.status_code: Optional[int] = None
         self.response_headers: Dict[str, str] = {}
 
+    @contextmanager
+    def _http(self) -> Iterator[httpx.Client]:
+        if self.client is not None:
+            yield self.client
+        else:
+            with httpx.Client(timeout=self.timeout, follow_redirects=True, headers=self.headers) as client:
+                yield client
+
     def fetch(self) -> str:
         """Fetches HTML content from target URL."""
-        with httpx.Client(timeout=self.timeout, follow_redirects=True, headers=self.headers) as client:
-            resp = client.get(self.target_url)
+        with self._http() as client:
+            resp = client.get(self.target_url, follow_redirects=True)
             resp.raise_for_status()
             self.status_code = resp.status_code
             self.response_headers = {k.lower(): v for k, v in resp.headers.items()}
@@ -51,14 +67,14 @@ class WebTargetParser:
         assets = {asset.href: asset for asset in root.assets}
         forms = {(form.action, form.method): form for form in root.forms}
 
-        with httpx.Client(timeout=self.timeout, follow_redirects=True, headers=self.headers) as client:
+        with self._http() as client:
             while queue and len(visited) < max_pages:
                 url = queue.pop(0)
                 if url in visited:
                     continue
                 visited.add(url)
                 try:
-                    resp = client.get(url)
+                    resp = client.get(url, follow_redirects=True)
                 except httpx.HTTPError:
                     continue  # unreachable pages are reported by the link tests
                 if resp.status_code != 200 or "text/html" not in resp.headers.get("content-type", ""):

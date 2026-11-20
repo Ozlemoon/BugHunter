@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BugHunter Raporu · {{ run.run_id }}</title>
+<style>
+  :root {
+    --bg: #f8fafc; --surface: #ffffff; --text: #0f172a; --muted: #475569; --line: #e2e8f0;
+    --pass: #047857; --pass-bg: #d1fae5; --fail: #b91c1c; --fail-bg: #fee2e2;
+    --critical: #7f1d1d; --high: #b91c1c; --medium: #b45309; --low: #475569; --code: #0f172a; --code-text: #e2e8f0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b1120; --surface: #111827; --text: #e5e7eb; --muted: #9ca3af; --line: #1f2937;
+      --pass: #6ee7b7; --pass-bg: #064e3b; --fail: #fca5a5; --fail-bg: #450a0a;
+      --critical: #fecaca; --high: #fca5a5; --medium: #fcd34d; --low: #cbd5e1; --code: #020617;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px 16px; background: var(--bg); color: var(--text);
+         font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; } h2 { font-size: 16px; margin: 32px 0 12px; }
+  .muted { color: var(--muted); } code, pre { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 20px; }
+  .tile { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .tile b { display: block; font-size: 24px; font-variant-numeric: tabular-nums; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 12px; }
+  .sev { display: inline-block; font-weight: 700; font-size: 11px; letter-spacing: .04em; padding: 2px 8px;
+         border-radius: 999px; border: 1px solid currentColor; }
+  .sev-CRITICAL { color: var(--critical); } .sev-HIGH { color: var(--high); }
+  .sev-MEDIUM { color: var(--medium); } .sev-LOW { color: var(--low); }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 12px 0 0; }
+  dt { color: var(--muted); } dd { margin: 0; overflow-wrap: anywhere; }
+  pre { background: var(--code); color: var(--code-text); padding: 12px; border-radius: 8px; overflow-x: auto; }
+  .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; }
+  td.num { font-variant-numeric: tabular-nums; text-align: right; }
+  .pill { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px; }
+  .pass { background: var(--pass-bg); color: var(--pass); } .fail { background: var(--fail-bg); color: var(--fail); }
+  details summary { cursor: pointer; font-weight: 600; margin-top: 10px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>BugHunter test raporu</h1>
+  <p class="muted">
+    {{ run.config.target_type.value }} · <code>{{ run.config.target_url }}</code><br>
+    Çalışma <code>{{ run.run_id }}</code> · {{ run.started_at.strftime("%Y-%m-%d %H:%M:%S UTC") }}
+    · {{ "%.1f"|format(run.summary.duration_ms / 1000) }} sn
+  </p>
+
+  <div class="tiles">
+    <div class="tile"><span class="muted">Toplam test</span><b>{{ run.summary.total_tests }}</b></div>
+    <div class="tile"><span class="muted">Başarılı</span><b>{{ run.summary.passed_tests }}</b></div>
+    <div class="tile"><span class="muted">Başarısız</span><b>{{ run.summary.failed_tests }}</b></div>
+    <div class="tile"><span class="muted">Otomatik düzeltilebilir</span><b>{{ run.summary.fixable_findings }}</b></div>
+  </div>
+
+  <h2>Bulgular ({{ run.findings|length }})</h2>
+  {% for f in run.findings %}
+  <section class="card">
+    <span class="sev sev-{{ f.evidence.severity.value }}">{{ f.evidence.severity.value }}</span>
+    <strong>{{ f.evidence.title }}</strong>
+    <dl>
+      <dt>İstek</dt><dd><code>{{ f.evidence.method }} {{ f.evidence.target_url }}</code></dd>
+      <dt>Beklenen</dt><dd>{{ f.evidence.expected_behavior }}</dd>
+      <dt>Gerçekleşen</dt><dd>{{ f.evidence.actual_behavior }}</dd>
+      <dt>Kök neden</dt><dd>{{ f.evidence.root_cause_hypothesis }}</dd>
+      {% if f.proposal %}<dt>Düzeltme</dt><dd>{{ f.proposal.status.value }} · {{ f.proposal.explanation }}</dd>{% endif %}
+      {% if f.verification %}<dt>Doğrulama</dt><dd>{{ f.verification.verdict }} · {{ f.verification.summary }}</dd>{% endif %}
+    </dl>
+    {% if f.proposal and f.proposal.patch_available %}
+    <details><summary>Önerilen diff</summary><pre>{{ f.proposal.unified_diff }}</pre></details>
+    {% endif %}
+    <details><summary>Bağımsız kanıt scripti</summary><pre>{{ f.evidence.reproduction_code }}</pre></details>
+  </section>
+  {% else %}
+  <p class="card">Seçilen kriterlere göre hata bulunmadı.</p>
+  {% endfor %}
+
+  <h2>Tüm testler</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Durum</th><th>Test</th><th>Kriter</th><th>İstek</th><th>HTTP</th><th>Süre (ms)</th></tr></thead>
+      <tbody>
+      {% for t, r in rows %}
+        <tr>
+          <td>{% if r and r.passed %}<span class="pill pass">GEÇTİ</span>{% else %}<span class="pill fail">KALDI</span>{% endif %}</td>
+          <td>{{ t.title }}<br><code class="muted">{{ t.id }}</code></td>
+          <td>{{ t.criterion.value }}</td>
+          <td><code>{{ t.method }} {{ t.url }}</code></td>
+          <td class="num">{{ r.status_code if r and r.status_code else "—" }}</td>
+          <td class="num">{{ "%.1f"|format(r.elapsed_ms) if r else "—" }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="muted">BugHunter AI tarafından üretildi.</p>
+</main>
+</body>
+</html>

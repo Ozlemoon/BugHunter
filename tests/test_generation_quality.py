@@ -3,12 +3,7 @@ End-to-end quality checks for test generation, execution and fix rules
 against the deliberately buggy playground targets (run in-process).
 """
 
-import importlib.util
-import shutil
-import sys
-import uuid
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 from starlette.testclient import TestClient
@@ -21,21 +16,7 @@ from core.patcher import CodePatcher, HumanApprovalGate
 from core.runner import TestRunner
 from core.targets.api_target import ApiTargetParser, SpecError
 from core.targets.web_target import WebTargetParser
-
-PLAYGROUND = Path(__file__).resolve().parent.parent / "playground"
-API_BASE = "http://127.0.0.1:8001"
-WEB_BASE = "http://127.0.0.1:8002"
-AUTH = {"Authorization": "Bearer admin-token"}
-
-
-def load_app(path: Path):
-    """Imports a fresh copy of a playground module so in-memory state never leaks between tests."""
-    name = f"bh_playground_{uuid.uuid4().hex}"
-    spec = importlib.util.spec_from_file_location(name, path)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module.app
+from tests.helpers import API_BASE, AUTH, WEB_BASE, load_app
 
 
 def api_suite(app, auth=AUTH, sla=500.0):
@@ -45,8 +26,7 @@ def api_suite(app, auth=AUTH, sla=500.0):
 
 
 def web_suite(client):
-    with patch("core.targets.web_target.httpx.Client", lambda **_: client):
-        spec = WebTargetParser(f"{WEB_BASE}/").crawl(max_pages=5)
+    spec = WebTargetParser(f"{WEB_BASE}/", client=client).crawl(max_pages=5)
     return TestGenerator(WEB_BASE).generate_web_tests(spec)
 
 
@@ -70,21 +50,6 @@ EXPECTED_WEB_FAILURES = {
     "TC-WEB-SEC-HEADERS": "add-security-headers-middleware",
     "TC-WEB-FORM-VALIDATION-2": "contact-email-must-contain-at",
 }
-
-
-@pytest.fixture
-def api_copy(tmp_path):
-    target = tmp_path / "sample_api.py"
-    shutil.copy(PLAYGROUND / "sample_api.py", target)
-    return target
-
-
-@pytest.fixture
-def web_copy(tmp_path):
-    target = tmp_path / "sample_web.py"
-    shutil.copy(PLAYGROUND / "sample_web.py", target)
-    shutil.copytree(PLAYGROUND / "templates", tmp_path / "templates")
-    return target
 
 
 def apply_all_fixes(failures, target: Path):
