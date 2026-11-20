@@ -71,6 +71,9 @@ class Settings:
     # Storage
     reports_dir: Path = PROJECT_ROOT / "reports"
 
+    # When set, every /api/* request must send this value in the X-BugHunter-Token header.
+    api_token: str = ""
+
     # Local RAG (Ollama + Chroma)
     ollama_url: str = "http://127.0.0.1:11434"
     rag_db: Path = PROJECT_ROOT / "run_artifacts" / "rag"
@@ -93,6 +96,7 @@ class Settings:
             patch_ready_timeout=_env_float("PATCH_READY_TIMEOUT", cls.patch_ready_timeout),
             patch_roots=tuple(_resolve(p) for p in roots.split(os.pathsep) if p) or (PROJECT_ROOT,),
             reports_dir=_resolve(_env("REPORTS_DIR", "reports")),
+            api_token=_env("API_TOKEN", ""),
             ollama_url=_env("OLLAMA_URL", cls.ollama_url).rstrip("/"),
             rag_db=_resolve(_env("RAG_DB", "run_artifacts/rag")),
             rag_chat_model=_env("RAG_CHAT_MODEL", cls.rag_chat_model),

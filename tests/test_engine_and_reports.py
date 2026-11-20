@@ -58,7 +58,9 @@ def test_approved_fix_is_verified_clean(api_copy, tmp_path):
 
     assert report.verdict == "CLEAN_FIX" and not report.rolled_back
     assert proposal.status == FixStatus.APPLIED
-    assert "order.quantity <= 0" in api_copy.read_text(encoding="utf-8")
+    patched = api_copy.read_text(encoding="utf-8")
+    assert "\n    if order.quantity <= 0:\n" in patched  # the real guard, not the "# if ..." comment
+    assert patched.count("Quantity must be greater than zero") == 2  # comment + new guard
 
 
 def test_fix_that_breaks_unauthenticated_clients_is_rolled_back(api_copy, tmp_path):

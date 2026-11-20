@@ -139,6 +139,8 @@ class HumanApprovalGate:
     def approve_fix(self, fix_id: str) -> FixProposal:
         """User explicitly grants approval to apply the fix."""
         proposal = self._require(fix_id)
+        if proposal.status == FixStatus.APPLIED:
+            raise PatchConflictError(f"Fix '{fix_id}' is already applied; roll it back first.")
         proposal.approved = True
         proposal.status = FixStatus.APPROVED
         return proposal
@@ -146,6 +148,8 @@ class HumanApprovalGate:
     def reject_fix(self, fix_id: str) -> FixProposal:
         """User explicitly rejects the fix proposal."""
         proposal = self._require(fix_id)
+        if proposal.status == FixStatus.APPLIED:
+            raise PatchConflictError(f"Fix '{fix_id}' is already applied; roll it back instead.")
         proposal.approved = False
         proposal.status = FixStatus.REJECTED
         return proposal
