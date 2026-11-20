@@ -6,7 +6,9 @@ safe patch application, and rollback.
 
 import os
 import tempfile
+
 import pytest
+
 from core.models import BugEvidence, TargetType, TestCriterion
 from core.patcher import CodePatcher, HumanApprovalGate
 
@@ -96,7 +98,7 @@ def test_human_approval_gate_allows_approved_fix_and_rollback(sample_code_file):
     assert applied is True
 
     # Verify target file has the patched validation code
-    with open(sample_code_file, "r", encoding="utf-8") as f:
+    with open(sample_code_file, encoding="utf-8") as f:
         patched_content = f.read()
     assert "if order.quantity <= 0:" in patched_content
     assert "raise HTTPException(status_code=422" in patched_content
@@ -107,7 +109,7 @@ def test_human_approval_gate_allows_approved_fix_and_rollback(sample_code_file):
 
     # Verify rollback restores the original content
     gate.rollback(sample_code_file)
-    with open(sample_code_file, "r", encoding="utf-8") as f:
+    with open(sample_code_file, encoding="utf-8") as f:
         restored_content = f.read()
     assert "if order.quantity <= 0:" not in restored_content
 

@@ -1,8 +1,8 @@
 import json
+from unittest import TestCase
 from unittest.mock import Mock, patch
 
 import httpx
-from unittest import TestCase
 
 from core.rag import DocumentIndex
 from core.rag_answer import EvidenceSelection, answer_question

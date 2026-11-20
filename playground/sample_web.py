@@ -1,10 +1,18 @@
 """
 Sample Web Application Target with Deliberate Real-World Flaws.
-Includes server-side HTML rendering, forms, and deliberate broken assets/links.
+
+Documented deliberate flaws:
+1. Form crash: POST /submit-contact returns 500 when the email has no '@'.
+2. Broken link: the home page links to /legacy-api-docs, which is a 404.
+3. Broken asset: the home page loads /static/missing_logo_icon.png (404).
+4. Reflected XSS: GET /search echoes the query into HTML without escaping.
+5. Missing hardening headers (X-Content-Type-Options, X-Frame-Options, CSP).
 """
 
+import html
 from pathlib import Path
-from fastapi import FastAPI, Form, Request, HTTPException
+
+from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
@@ -21,6 +29,7 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 # In-memory storage for feedback submissions
 CONTACT_SUBMISSIONS = []
+CATALOG = ["Wireless Mouse", "Mechanical Keyboard", "USB-C Monitor"]
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -67,3 +76,17 @@ async def submit_contact(
 
 # Note: Notice that /legacy-api-docs and /static/missing_logo_icon.png are NOT defined,
 # so requests to them will naturally return 404 Not Found, testing the crawler/link checker.
+
+
+# WEB BUG 4: Reflected XSS
+@app.get("/search", response_class=HTMLResponse)
+async def search(q: str = ""):
+    """
+    Search the catalog.
+    FLAW: product names are escaped, but the query itself is echoed raw into the page.
+    """
+    matches = [name for name in CATALOG if q.lower() in name.lower()]
+    items = "".join(f"<li>{html.escape(name)}</li>" for name in matches)
+    heading = f"<h1>Results for {q}</h1>"
+    return HTMLResponse(f"<!DOCTYPE html><html><head><title>Search</title></head>"
+                        f"<body>{heading}<ul>{items}</ul><a href=\"/\">Home</a></body></html>")

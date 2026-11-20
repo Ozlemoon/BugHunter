@@ -4,9 +4,10 @@ Validates dashboard routing, hunt API execution, and approval actions.
 """
 
 from starlette.testclient import TestClient
-from web.app import app as web_app
-from playground.sample_api import app as sample_api_app
+
 from core.models import TestResult
+from playground.sample_api import app as sample_api_app
+from web.app import app as web_app
 
 
 def test_dashboard_homepage_renders():

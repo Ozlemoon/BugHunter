@@ -276,6 +276,31 @@ FIX_RULES: List[FixRule] = [
         explanation="Added validation to verify presence of '@' in email string, returning HTTP 422 "
                     "validation error instead of crashing the server with 500 IndexError.",
     ),
+    FixRule(
+        name="escape-search-query",
+        matches=lambda e: "xss" in e.tags and _endpoint(e) == "/search",
+        anchor='    heading = f"<h1>Results for {q}</h1>"',
+        replacement='    heading = f"<h1>Results for {html.escape(q)}</h1>"',
+        explanation="HTML-escapes the search query before rendering it, closing the reflected XSS hole.",
+    ),
+    FixRule(
+        name="add-security-headers-middleware",
+        matches=lambda e: "security-headers" in e.tags,
+        anchor="templates = Jinja2Templates(directory=str(TEMPLATES_DIR))",
+        replacement="templates = Jinja2Templates(directory=str(TEMPLATES_DIR))\n"
+                    "\n"
+                    "\n"
+                    '@app.middleware("http")\n'
+                    "async def security_headers(request: Request, call_next):\n"
+                    "    response = await call_next(request)\n"
+                    '    response.headers.setdefault("X-Content-Type-Options", "nosniff")\n'
+                    '    response.headers.setdefault("X-Frame-Options", "DENY")\n'
+                    '    response.headers.setdefault("Content-Security-Policy", '
+                    "\"default-src 'self'; style-src 'self' 'unsafe-inline'\")\n"
+                    "    return response",
+        explanation="Adds a middleware that sends X-Content-Type-Options, X-Frame-Options and a "
+                    "Content-Security-Policy on every response.",
+    ),
 ]
 
 

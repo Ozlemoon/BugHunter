@@ -4,6 +4,8 @@ Tests test execution and evidence collection against sample playground apps.
 """
 
 from starlette.testclient import TestClient
+
+from core.analyzer import BugAnalyzer
 from core.models import (
     AssertionType,
     TargetType,
@@ -12,7 +14,6 @@ from core.models import (
     TestCriterion,
 )
 from core.runner import TestRunner
-from core.analyzer import BugAnalyzer
 from playground.sample_api import app as api_app
 from playground.sample_web import app as web_app
 

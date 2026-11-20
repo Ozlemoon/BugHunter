@@ -7,12 +7,16 @@ Documented deliberate flaws:
 2. Server Crash / 500 Error: GET /users/{user_id}/profile crashes with unhandled KeyError on non-existent users.
 3. Security / Broken Authorization: DELETE /products/{product_id} lacks authorization checks.
 4. Performance / SLA Violation: GET /products/heavy-search takes > 1200ms, violating sub-second SLA criteria.
+5. Boundary Bug: POST /products accepts a negative price or stock.
+
+Admin credentials for the demo: Authorization: Bearer admin-token
 """
 
 import asyncio
-from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, HTTPException, Header, Response
-from pydantic import BaseModel, Field
+from typing import Any, Dict, List, Optional
+
+from fastapi import FastAPI, Header, HTTPException, Path
+from pydantic import BaseModel
 
 app = FastAPI(
     title="ShopMaster Demo API",
@@ -69,17 +73,32 @@ def get_products():
     return list(PRODUCTS_DB.values())
 
 
+# BUG 4: Performance / SLA Violation
+@app.get("/products/heavy-search")
+async def heavy_search(query: str = ""):
+    """
+    Search products with deliberate artificial delay simulating unindexed heavy query.
+    FLAW: Exceeds standard <500ms SLA criteria.
+    """
+    await asyncio.sleep(1.3)  # Deliberately sleeps 1.3 seconds
+    results = [p for p in PRODUCTS_DB.values() if query.lower() in p["name"].lower()]
+    return {"query": query, "count": len(results), "results": results}
+
+
 @app.get("/products/{product_id}")
-def get_product(product_id: int):
+def get_product(product_id: int = Path(examples=[1])):
     """Retrieve product details by ID."""
     if product_id not in PRODUCTS_DB:
         raise HTTPException(status_code=404, detail="Product not found")
     return PRODUCTS_DB[product_id]
 
 
+# BUG 5: Boundary bug - negative price or stock is stored as-is.
 @app.post("/products", status_code=201)
 def create_product(product: ProductCreate):
-    """Create a new product."""
+    """Create a new product.
+    FLAW: no check that price and stock are non-negative.
+    """
     new_id = max(PRODUCTS_DB.keys(), default=0) + 1
     new_prod = {
         "id": new_id,
@@ -94,14 +113,14 @@ def create_product(product: ProductCreate):
 # BUG 3: Broken Access Control (BOLA / Missing Auth on Destructive Endpoint)
 # Anyone can delete any product without an Authorization token or admin check!
 @app.delete("/products/{product_id}")
-def delete_product(product_id: int, authorization: Optional[str] = Header(None)):
+def delete_product(product_id: int = Path(examples=[1]), authorization: Optional[str] = Header(None)):
     """
     Delete a product from the catalog.
     FLAW: authorization header is neither enforced nor checked for admin role.
     """
     if product_id not in PRODUCTS_DB:
         raise HTTPException(status_code=404, detail="Product not found")
-    
+
     # Intentionally missing: if not authorization or authorization != "Bearer admin-token": raise 401/403
     deleted = PRODUCTS_DB.pop(product_id)
     return {"message": "Product deleted successfully", "deleted": deleted}
@@ -117,9 +136,9 @@ def create_order(order: OrderCreate):
     """
     if order.product_id not in PRODUCTS_DB:
         raise HTTPException(status_code=404, detail="Product not found")
-    
+
     product = PRODUCTS_DB[order.product_id]
-    
+
     # Intentionally missing:
     # if order.quantity <= 0:
     #     raise HTTPException(status_code=422, detail="Quantity must be greater than zero")
@@ -142,7 +161,7 @@ def create_order(order: OrderCreate):
 # BUG 2: Server Crash / HTTP 500 Unhandled Exception
 # Fails with unhandled KeyError instead of returning 404 or empty profile object.
 @app.get("/users/{user_id}/profile")
-def get_user_profile(user_id: int):
+def get_user_profile(user_id: int = Path(examples=[101])):
     """
     Retrieve user extended profile.
     FLAW: Direct dictionary lookup crashes with KeyError (500) if user or profile doesn't exist.
@@ -154,15 +173,3 @@ def get_user_profile(user_id: int):
         "user_id": user_id,
         "profile": profile_data
     }
-
-
-# BUG 4: Performance / SLA Violation
-@app.get("/products/heavy-search")
-async def heavy_search(query: str = ""):
-    """
-    Search products with deliberate artificial delay simulating unindexed heavy query.
-    FLAW: Exceeds standard <500ms SLA criteria.
-    """
-    await asyncio.sleep(1.3)  # Deliberately sleeps 1.3 seconds
-    results = [p for p in PRODUCTS_DB.values() if query.lower() in p["name"].lower()]
-    return {"query": query, "count": len(results), "results": results}

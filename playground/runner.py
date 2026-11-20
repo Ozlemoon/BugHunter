@@ -1,40 +1,65 @@
 """
 Playground Runner:
-Starts either the Sample API (port 8001) or Sample Web App (port 8002) or both.
+Starts the Sample API, the Sample Web App, or both.
+
+Both targets run with auto-reload watching the playground folder, so a fix
+approved in BugHunter is live within a second and the regression check
+re-tests the patched code (reload also resets the in-memory demo data).
 """
 
-import sys
-import uvicorn
 import multiprocessing
+import sys
+from pathlib import Path
 
-def run_api(port: int = 8001):
-    print(f"🚀 Starting Sample API target on http://127.0.0.1:{port}")
-    uvicorn.run("playground.sample_api:app", host="127.0.0.1", port=port, log_level="warning")
+import uvicorn
 
-def run_web(port: int = 8002):
-    print(f"🌐 Starting Sample Web App target on http://127.0.0.1:{port}")
-    uvicorn.run("playground.sample_web:app", host="127.0.0.1", port=port, log_level="warning")
+from core.config import get_settings
 
-def run_all():
-    p1 = multiprocessing.Process(target=run_api, args=(8001,))
-    p2 = multiprocessing.Process(target=run_web, args=(8002,))
-    p1.start()
-    p2.start()
-    print("✨ Both playground targets are running.")
-    print(" - Sample API: http://127.0.0.1:8001 (Docs: http://127.0.0.1:8001/docs)")
-    print(" - Sample Web: http://127.0.0.1:8002")
+PLAYGROUND_DIR = str(Path(__file__).resolve().parent)
+
+
+def _serve(app_path: str, port: int, reload: bool) -> None:
+    settings = get_settings()
+    uvicorn.run(
+        app_path,
+        host=settings.host,
+        port=port,
+        log_level="warning",
+        reload=reload,
+        reload_dirs=[PLAYGROUND_DIR] if reload else None,
+        reload_includes=["*.py"] if reload else None,
+    )
+
+
+def run_api(port: int | None = None, reload: bool = True) -> None:
+    port = port or get_settings().playground_api_port
+    print(f"🚀 Sample API target on http://127.0.0.1:{port}  (docs: /docs)")
+    _serve("playground.sample_api:app", port, reload)
+
+
+def run_web(port: int | None = None, reload: bool = True) -> None:
+    port = port or get_settings().playground_web_port
+    print(f"🌐 Sample Web App target on http://127.0.0.1:{port}")
+    _serve("playground.sample_web:app", port, reload)
+
+
+def run_all(reload: bool = True) -> None:
+    processes = [
+        multiprocessing.Process(target=run_api, kwargs={"reload": reload}),
+        multiprocessing.Process(target=run_web, kwargs={"reload": reload}),
+    ]
+    for process in processes:
+        process.start()
+    print("✨ Playground targets are running. Press Ctrl+C to stop.")
     try:
-        p1.join()
-        p2.join()
+        for process in processes:
+            process.join()
     except KeyboardInterrupt:
-        p1.terminate()
-        p2.terminate()
+        for process in processes:
+            process.terminate()
         print("\n🛑 Stopped playground targets.")
 
+
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "api":
-        run_api()
-    elif len(sys.argv) > 1 and sys.argv[1] == "web":
-        run_web()
-    else:
-        run_all()
+    choice = sys.argv[1] if len(sys.argv) > 1 else "all"
+    {"api": run_api, "web": run_web}.get(choice, run_all)()

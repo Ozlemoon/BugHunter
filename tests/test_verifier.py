@@ -4,6 +4,7 @@ Tests defect resolution verification, regression detection, and before/after met
 """
 
 from starlette.testclient import TestClient
+
 from core.models import (
     AssertionType,
     FixProposal,

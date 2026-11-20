@@ -2,10 +2,10 @@
 Unit tests for Stage 3: Parser and Generator modules.
 """
 
-from core.models import TestCriterion, TargetType
+from core.generator import TestGenerator
+from core.models import TestCriterion
 from core.targets.api_target import ApiTargetParser
 from core.targets.web_target import WebTargetParser
-from core.generator import TestGenerator
 from playground.sample_api import app as sample_api_app
 
 

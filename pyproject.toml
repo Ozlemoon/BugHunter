@@ -53,7 +53,8 @@ extend-exclude = ["playground/*.bughunter.bak"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
-ignore = ["E501", "B008", "UP006", "UP007", "UP035", "UP045"]
+ignore = ["E501", "B008", "B905", "UP006", "UP007", "UP035", "UP045"]
 
 [tool.ruff.lint.per-file-ignores]
-"playground/*" = ["B904"]
+# HTTPException is imported for the fixes BugHunter proposes to these deliberately buggy files.
+"playground/*" = ["B904", "F401"]
