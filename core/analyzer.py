@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 
 from core.models import AssertionType, BugEvidence, Severity, TestCase, TestCriterion, TestResult
+from core.redaction import AUTH_ENV_VAR, is_sensitive
 
 
 class BugAnalyzer:
@@ -116,15 +117,20 @@ class BugAnalyzer:
             checks.append({"type": a.assertion_type.value, "expected": a.expected_value, "description": a.description})
 
         payload_kw = ("data" if test.is_form_data else "json") if test.payload is not None else None
+        # Credentials never go into the script; they are read from the environment at run time.
+        headers = {k: v for k, v in test.headers.items() if not is_sensitive(k)}
+        secret_headers = sorted(k for k in test.headers if is_sensitive(k))
         return f'''"""
 Standalone Bug Reproduction Script for: {test.id}
 Generated autonomously by BugHunter AI.
 
     pip install httpx
     python reproduce_bug.py     # exit code 1 = bug reproduced, 0 = fixed
+{f"    # needs: {AUTH_ENV_VAR}='<header value>'" if secret_headers else ""}
 """
 
 import json
+import os
 import sys
 import time
 
@@ -132,7 +138,9 @@ import httpx
 
 URL = {test.url!r}
 METHOD = {test.method!r}
-HEADERS = json.loads({json.dumps(test.headers)!r})
+HEADERS = json.loads({json.dumps(headers)!r})
+for name in {secret_headers!r}:
+    HEADERS[name] = os.environ[{AUTH_ENV_VAR!r}]
 PARAMS = json.loads({json.dumps(test.query_params)!r})
 PAYLOAD = json.loads({json.dumps(test.payload)!r})
 PAYLOAD_KIND = {payload_kw!r}

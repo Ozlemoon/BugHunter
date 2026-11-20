@@ -72,10 +72,12 @@ def to_html(run: HuntRun) -> str:
 
 
 def render(run: HuntRun, fmt: str) -> str:
+    from core.redaction import redact_run
+
     renderers = {"json": to_json, "junit": to_junit, "html": to_html}
     if fmt not in renderers:
         raise ValueError(f"Unknown report format '{fmt}'. Use one of: {', '.join(renderers)}")
-    return renderers[fmt](run)
+    return renderers[fmt](redact_run(run))
 
 
 def write(run: HuntRun, fmt: str, path: Path) -> Path:

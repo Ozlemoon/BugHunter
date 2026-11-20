@@ -118,3 +118,28 @@ def test_reports_render_in_every_format(web_copy, tmp_path):
     assert "<script>bughunter_xss_probe()" not in html  # probe text is escaped in the evidence
     with pytest.raises(ValueError):
         reporting.render(run, "pdf")
+
+
+def test_credentials_never_reach_disk_reports_or_repro_scripts(api_copy, tmp_path):
+    secret = "Bearer s3cr3t-only-in-memory"  # must not appear anywhere in the target's source
+    session = session_for(api_copy, tmp_path)
+    run = session.start(api_config(api_copy, auth_header=secret))
+
+    stored = next((tmp_path / "reports" / "runs").glob("*.json")).read_text(encoding="utf-8")
+    assert secret not in stored
+    for fmt in ("json", "junit", "html"):
+        assert secret not in reporting.render(run, fmt)
+    assert all(secret not in f.evidence.reproduction_code for f in run.findings)
+
+    # The live run keeps the credential in memory so verification can still authenticate.
+    assert run.config.auth_header == secret
+    report = session.approve(run.run_id, fix_for(run, "TC-API-BOUND-NEG-POST-products").fix_id)
+    assert report.verdict == "CLEAN_FIX"
+
+
+def test_repro_script_reads_credentials_from_environment(api_copy, tmp_path):
+    run = session_for(api_copy, tmp_path).start(api_config(api_copy))
+    finding = next(f for f in run.findings if f.evidence.test_id == "TC-API-BOUND-NEG-POST-orders")
+    script = finding.evidence.reproduction_code
+    assert "os.environ['BUGHUNTER_AUTH_HEADER']" in script
+    compile(script, "reproduce_bug.py", "exec")

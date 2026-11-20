@@ -28,8 +28,11 @@ class RunStore:
 
     def save(self, run: HuntRun) -> Path:
         """Atomic write so a crash never leaves a half-written report."""
+        from core.redaction import redact_run
+
         self.directory.mkdir(parents=True, exist_ok=True)
         target = self._path(run.run_id)
+        run = redact_run(run)
         fd, tmp = tempfile.mkstemp(dir=self.directory, suffix=".tmp")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:

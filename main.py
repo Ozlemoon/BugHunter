@@ -30,6 +30,9 @@ def start_web(host: Optional[str] = None, port: Optional[int] = None, reload: bo
     configure_utf8()
     settings = get_settings()
     host, port = host or settings.host, port or settings.port
+    if host not in ("127.0.0.1", "localhost") and not settings.api_token:
+        print("⚠️  Panel tüm ağ arayüzlerine açık ve BUGHUNTER_API_TOKEN tanımlı değil. "
+              "Panel kaynak koda yama uygulayabildiği için bir token tanımlayın.")
     print(f"\n🚀 BugHunter AI paneli: http://{'127.0.0.1' if host == '0.0.0.0' else host}:{port}\n")
     uvicorn.run("web.app:app", host=host, port=port, log_level=settings.log_level.lower(), reload=reload,
                 reload_dirs=["web", "core"] if reload else None)
