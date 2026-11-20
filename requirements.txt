@@ -1,29 +1,25 @@
-# BugHunter AI Core Dependencies (100% Free & Open Source)
+# BugHunter AI runtime dependencies (100% free & open source)
+# Install for development with: pip install -r requirements-dev.txt
 
-# Web & API Framework / Server
+# Web & API framework / server
 fastapi>=0.110.0
-uvicorn>=0.28.0
+uvicorn[standard]>=0.28.0
 
-# HTTP & Network Clients (API & Website Testing)
+# HTTP client (API & website testing)
 httpx>=0.27.0
-requests>=2.31.0
 
-# Web Application & HTML/DOM Analysis
+# HTML / DOM analysis
 beautifulsoup4>=4.12.3
-lxml>=5.1.0
 
-# Testing & Assertions
-pytest>=8.0.0
-
-# Data Validation & Modeling
+# Data validation & modelling
 pydantic>=2.6.0
 
-# Formatting, Reports & CLI
+# CLI, reports & templates
 rich>=13.7.0
 jinja2>=3.1.3
 python-multipart>=0.0.9
 pyyaml>=6.0.1
 
-# Local RAG vector store
+# Local RAG (document Q&A) — needs a running Ollama for answers
 chromadb>=1.5.9,<2
 langchain-ollama>=1.1,<2

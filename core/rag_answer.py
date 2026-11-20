@@ -11,6 +11,8 @@ from langchain_ollama import ChatOllama
 from ollama import ResponseError
 from pydantic import BaseModel
 
+from core.config import get_settings
+
 if TYPE_CHECKING:
     from core.rag import DocumentIndex
 
@@ -44,7 +46,7 @@ def answer_question(
 
     chat = ChatOllama(
         model=model,
-        base_url="http://127.0.0.1:11434",
+        base_url=get_settings().ollama_url,
         temperature=0,
         reasoning=False,
         client_kwargs={"timeout": 120, "trust_env": False},

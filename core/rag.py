@@ -8,6 +8,8 @@ from pathlib import Path
 import chromadb
 import httpx
 
+from core.config import get_settings
+
 
 class DocumentIndex:
     def __init__(self, database: Path):
@@ -21,9 +23,10 @@ class DocumentIndex:
     @staticmethod
     def embed(texts: list[str]) -> list[list[float]]:
         try:
+            settings = get_settings()
             response = httpx.post(
-                "http://127.0.0.1:11434/api/embed",
-                json={"model": "embeddinggemma", "input": texts, "truncate": False},
+                f"{settings.ollama_url}/api/embed",
+                json={"model": settings.rag_embed_model, "input": texts, "truncate": False},
                 timeout=60,
                 trust_env=False,
             )
@@ -107,8 +110,9 @@ class DocumentIndex:
 
 
 def main() -> None:
+    settings = get_settings()
     parser = argparse.ArgumentParser(description="BugHunter belge indeksleme ve arama")
-    parser.add_argument("--db", type=Path, default=Path("run_artifacts/rag"))
+    parser.add_argument("--db", type=Path, default=settings.rag_db)
     commands = parser.add_subparsers(dest="command", required=True)
     index = commands.add_parser("index")
     index.add_argument("files", nargs="+", type=Path)
@@ -121,7 +125,7 @@ def main() -> None:
     ask.add_argument("question")
     ask.add_argument("--top-k", type=int, default=6)
     ask.add_argument("--top-n", type=int, default=3)
-    ask.add_argument("--model", default="qwen3.5")
+    ask.add_argument("--model", default=settings.rag_chat_model)
     args = parser.parse_args()
 
     try:

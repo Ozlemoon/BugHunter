@@ -6,6 +6,7 @@ from pathlib import Path
 from statistics import median
 from time import perf_counter
 
+from core.config import get_settings
 from core.rag import DocumentIndex
 from core.rag_answer import answer_question, rerank_passages
 
@@ -13,7 +14,7 @@ from core.rag_answer import answer_question, rerank_passages
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("cases", type=Path, help="JSON list of question and filename pairs")
-    parser.add_argument("--db", type=Path, default=Path("run_artifacts/rag"))
+    parser.add_argument("--db", type=Path, default=get_settings().rag_db)
     parser.add_argument("--model", action="append", default=[])
     args = parser.parse_args()
     cases = json.loads(args.cases.read_text(encoding="utf-8-sig"))

@@ -65,3 +65,4 @@ temp_test_env/
 logs/
 run_artifacts/
 *.bughunter.bak
+!.env.example
