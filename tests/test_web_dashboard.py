@@ -14,8 +14,9 @@ def test_dashboard_homepage_renders():
     response = client.get("/")
     assert response.status_code == 200
     assert "BugHunter AI" in response.text
-    assert "Human-in-the-Loop" in response.text
-    assert "Test Hedefi ve Kriter Belirleme" in response.text
+    assert "Test çalışma alanı" in response.text
+    assert "Test rehberi" in response.text
+    assert "Proje belgelerine sor" in response.text
 
 
 def test_run_hunt_api_endpoint(monkeypatch):

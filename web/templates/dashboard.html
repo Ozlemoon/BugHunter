@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        [hidden] { display: none !important; }
         body { font-family: 'Plus Jakarta Sans', sans-serif; }
         pre, code, .font-mono { font-family: 'JetBrains Mono', monospace; }
         .diff-add { background-color: #dcfce7; color: #166534; }
@@ -14,122 +15,96 @@
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen">
-    <!-- Header -->
-    <header class="bg-slate-900 text-white shadow-md sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-                <span class="text-3xl">🎯</span>
-                <div>
-                    <h1 class="text-xl font-bold tracking-tight">BugHunter AI</h1>
-                    <p class="text-xs text-slate-400">İnsan Onaylı Otonom Test & Hata Analiz Ajanı</p>
-                </div>
-            </div>
-            <div class="flex items-center space-x-4">
-                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                    ● Sistem Çevrimiçi
-                </span>
-                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                    🛡️ Human-in-the-Loop Aktif
-                </span>
-            </div>
+    <header class="border-b border-slate-800 bg-slate-950 text-white">
+        <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-5 sm:px-8">
+            <a href="/" class="text-lg font-bold tracking-tight">BugHunter <span class="text-teal-300">AI</span></a>
+            <nav aria-label="Panel" class="flex flex-wrap gap-5 text-sm font-medium text-slate-300">
+                <a href="#test-setup" class="hover:text-white">Testler</a>
+                <a href="#test-guide" class="hover:text-white">Rehber</a>
+                <a href="#rag-heading" class="hover:text-white">Proje belgeleri</a>
+            </nav>
         </div>
     </header>
 
-    <main class="max-w-7xl mx-auto px-6 py-8 space-y-8">
-        <!-- Target & Criteria Configuration Card -->
-        <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <h2 class="text-lg font-bold text-slate-900 mb-4 flex items-center space-x-2">
-                <span>⚙️</span>
-                <span>Test Hedefi ve Kriter Belirleme</span>
-            </h2>
-
-            <form id="hunt-form" class="space-y-6">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="md:col-span-2 space-y-2">
-                        <label class="block text-sm font-semibold text-slate-700">Hedef URL veya Spesifikasyon</label>
-                        <div class="flex space-x-2">
-                            <input type="text" id="target-url" value="http://127.0.0.1:8001/openapi.json"
-                                class="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm font-mono"
-                                placeholder="http://127.0.0.1:8001/openapi.json veya http://127.0.0.1:8002">
-                            <select id="target-type" class="px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-sm font-medium">
-                                <option value="API">REST API (OpenAPI)</option>
-                                <option value="WEB">Web Sitesi / Sayfa</option>
+    <main class="mx-auto max-w-7xl space-y-6 px-5 py-8 sm:px-8">
+        <h1 class="text-3xl font-bold tracking-tight text-slate-950">Test çalışma alanı</h1>
+        <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            <section id="test-setup" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                <h2 class="text-lg font-bold text-slate-950">Test yapılandırması</h2>
+                <form id="hunt-form" class="mt-5 space-y-5">
+                    <div class="grid gap-4 sm:grid-cols-3">
+                        <div>
+                            <label for="target-type" class="mb-1 block text-sm font-semibold">Hedef türü</label>
+                            <select id="target-type" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm">
+                                <option value="API">REST API</option>
+                                <option value="WEB">Web sayfası</option>
                             </select>
                         </div>
-                        <div class="flex space-x-2 text-xs text-slate-500 pt-1">
-                            <span>Hızlı Seçenekler:</span>
-                            <button type="button" onclick="setTarget('http://127.0.0.1:8001/openapi.json', 'API')" class="text-blue-600 hover:underline">Örnek Demo API</button>
-                            <span>•</span>
-                            <button type="button" onclick="setTarget('http://127.0.0.1:8002', 'WEB')" class="text-blue-600 hover:underline">Örnek Demo Web Portalı</button>
+                        <div class="min-w-0 sm:col-span-2">
+                            <label for="target-url" id="target-label" class="mb-1 block text-sm font-semibold">OpenAPI adresi</label>
+                            <input type="text" id="target-url" required aria-describedby="guide-target"
+                                   class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-mono">
                         </div>
                     </div>
-
-                    <div class="space-y-2">
-                        <label class="block text-sm font-semibold text-slate-700">Maksimum SLA Yanıt Eşiği (ms)</label>
-                        <input type="number" id="sla-threshold" value="500"
-                            class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm font-mono">
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" onclick="setTarget('http://127.0.0.1:8001/openapi.json', 'API')" class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold hover:bg-slate-50">Demo API adresi</button>
+                        <button type="button" onclick="setTarget('http://127.0.0.1:8002', 'WEB')" class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold hover:bg-slate-50">Demo web adresi</button>
                     </div>
-                </div>
-
-                <!-- Test Criteria Badges Checkbox -->
-                <div class="space-y-2">
-                    <label class="block text-sm font-semibold text-slate-700">Çalıştırılacak Test Kriterleri</label>
-                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-                        <label class="flex items-center p-3 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50 transition">
-                            <input type="checkbox" name="criteria" value="FUNCTIONAL" checked class="rounded text-blue-600 focus:ring-blue-500 mr-2.5">
-                            <div>
-                                <span class="text-xs font-bold text-emerald-700 block">🟢 Fonksiyonel</span>
-                                <span class="text-[11px] text-slate-500">Happy Path & Şema</span>
-                            </div>
-                        </label>
-
-                        <label class="flex items-center p-3 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50 transition">
-                            <input type="checkbox" name="criteria" value="BOUNDARY" checked class="rounded text-blue-600 focus:ring-blue-500 mr-2.5">
-                            <div>
-                                <span class="text-xs font-bold text-amber-700 block">🟡 Sınır Değerleri</span>
-                                <span class="text-[11px] text-slate-500">Negatif / Boş / Aşırı</span>
-                            </div>
-                        </label>
-
-                        <label class="flex items-center p-3 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50 transition">
-                            <input type="checkbox" name="criteria" value="SECURITY" checked class="rounded text-blue-600 focus:ring-blue-500 mr-2.5">
-                            <div>
-                                <span class="text-xs font-bold text-rose-700 block">🔴 Güvenlik & Yetki</span>
-                                <span class="text-[11px] text-slate-500">Eksik Token / Yetki</span>
-                            </div>
-                        </label>
-
-                        <label class="flex items-center p-3 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50 transition">
-                            <input type="checkbox" name="criteria" value="PERFORMANCE" checked class="rounded text-blue-600 focus:ring-blue-500 mr-2.5">
-                            <div>
-                                <span class="text-xs font-bold text-indigo-700 block">🔵 Performans & SLA</span>
-                                <span class="text-[11px] text-slate-500">Gecikme & Timeout</span>
-                            </div>
-                        </label>
-
-                        <label class="flex items-center p-3 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50 transition">
-                            <input type="checkbox" name="criteria" value="WEB_VALIDATION" checked class="rounded text-blue-600 focus:ring-blue-500 mr-2.5">
-                            <div>
-                                <span class="text-xs font-bold text-purple-700 block">🟣 Web Bütünlük</span>
-                                <span class="text-[11px] text-slate-500">Kırık Link & Form</span>
-                            </div>
-                        </label>
+                    <fieldset>
+                        <legend class="mb-2 text-sm font-semibold">Test kriterleri</legend>
+                        <div class="grid gap-2 sm:grid-cols-2">
+                            <label data-targets="API WEB" class="flex items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm">
+                                <input type="checkbox" name="criteria" value="FUNCTIONAL" checked class="mt-1 accent-teal-700">
+                                <span><strong class="block">İşlevsellik</strong><span class="text-slate-600">Beklenen yanıt, bağlantılar ve formlar</span></span>
+                            </label>
+                            <label data-targets="API WEB" class="flex items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm">
+                                <input type="checkbox" name="criteria" value="BOUNDARY" class="mt-1 accent-teal-700">
+                                <span><strong class="block">Sınır değerleri</strong><span class="text-slate-600">Alan kısıtları ve zorunlu girdiler</span></span>
+                            </label>
+                            <label data-targets="API" class="flex items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm">
+                                <input type="checkbox" name="criteria" value="SECURITY" class="mt-1 accent-teal-700">
+                                <span><strong class="block">Yetkilendirme</strong><span class="text-slate-600">Belgelenmiş erişim gereksinimleri</span></span>
+                            </label>
+                            <label data-targets="API" class="flex items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm">
+                                <input type="checkbox" name="criteria" value="PERFORMANCE" class="mt-1 accent-teal-700">
+                                <span><strong class="block">Yanıt süresi</strong><span class="text-slate-600">İstek süresini SLA eşiğiyle karşılaştırır</span></span>
+                            </label>
+                            <label data-targets="WEB" hidden class="items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm">
+                                <input type="checkbox" name="criteria" value="WEB_VALIDATION" disabled class="mt-1 accent-teal-700">
+                                <span><strong class="block">Web doğrulama</strong><span class="text-slate-600">Bağlantıları ve form doğrulamasını kontrol eder</span></span>
+                            </label>
+                        </div>
+                    </fieldset>
+                    <div id="sla-field" hidden>
+                        <label for="sla-threshold" class="mb-1 block text-sm font-semibold">Yanıt süresi eşiği (ms)</label>
+                        <input type="number" id="sla-threshold" min="1" value="500"
+                               class="w-full max-w-48 rounded-lg border border-slate-300 px-3 py-2 text-sm">
                     </div>
-                </div>
+                    <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+                        <p id="test-setup-status" role="status" class="text-sm text-slate-600"></p>
+                        <button type="submit" id="btn-start" class="rounded-lg bg-teal-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">Testi başlat</button>
+                    </div>
+                </form>
+            </section>
 
-                <div class="flex items-center justify-between pt-2 border-t border-slate-100">
-                    <p class="text-xs text-slate-500">Döngü: Test Et ➔ Araştır ➔ Kanıtla ➔ Onay İste ➔ Güvenli Düzelt ➔ Doğrula</p>
-                    <button type="submit" id="btn-start" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm rounded-lg shadow-sm flex items-center space-x-2 transition cursor-pointer">
-                        <span>🚀 Otonom Test Avını Başlat</span>
-                    </button>
-                </div>
-            </form>
-        </section>
+            <aside id="test-guide" aria-labelledby="guide-heading" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                <h2 id="guide-heading" class="text-lg font-bold text-slate-950">Test rehberi</h2>
+                <ol class="mt-4 list-decimal space-y-3 pl-5 text-sm leading-relaxed text-slate-700">
+                    <li><strong>Adresi gir.</strong> <span id="guide-target"></span></li>
+                    <li><strong>Kontrolleri seç.</strong> <span id="guide-criteria"></span></li>
+                    <li><strong>Sonucu incele.</strong> Testten sonra başarısız kontrolleri açıp beklenen ve gerçekleşen davranışı karşılaştır.</li>
+                </ol>
+                <details class="mt-5 border-t border-slate-100 pt-4 text-sm text-slate-600">
+                    <summary class="cursor-pointer font-semibold text-slate-800">Demo adreslerini nasıl kullanırım?</summary>
+                    <p class="mt-2">Proje klasöründe <code>python main.py playground</code> çalıştır. Ardından demo adreslerinden birini seç.</p>
+                </details>
+            </aside>
+        </div>
 
         <!-- Loading Indicator -->
         <div id="loading" class="hidden text-center py-12">
             <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent"></div>
-            <p class="mt-4 text-sm font-semibold text-slate-600">Dokümantasyon analiz ediliyor, otonom testler üretilip koşturuluyor...</p>
+            <p class="mt-4 text-sm font-semibold text-slate-600">Seçili kontroller çalıştırılıyor…</p>
         </div>
 
         <!-- Results Section -->
@@ -158,8 +133,8 @@
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                 <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
                     <div>
-                        <h3 class="text-base font-bold text-slate-900">🛡️ Tespit Edilen Hatalar & İnsan Onay Sırası</h3>
-                        <p class="text-xs text-slate-500">Her hata için bağımsız kanıt kodu ve Unified Diff yama teklifi hazırdır.</p>
+                        <h3 class="text-base font-bold text-slate-900">Bulgular ve düzeltme önerileri</h3>
+                        <p class="text-xs text-slate-500">Beklenen ve gerçekleşen davranışı karşılaştır.</p>
                     </div>
                     <span id="queue-badge" class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800">
                         0 Hata
@@ -174,7 +149,7 @@
             <!-- Full Test Execution Log Table -->
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                 <div class="px-6 py-4 border-b border-slate-200 bg-slate-50">
-                    <h3 class="text-base font-bold text-slate-900">📋 Tüm Koşturulan Testler</h3>
+                    <h3 class="text-base font-bold text-slate-900">Test sonuçları</h3>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-left text-xs">
@@ -254,10 +229,51 @@
             }
         });
 
-        function setTarget(url, type) {
-            document.getElementById('target-url').value = url;
-            document.getElementById('target-type').value = type;
+        const targetTypeField = document.getElementById('target-type');
+        const targetUrlField = document.getElementById('target-url');
+        const criteriaFields = Array.from(document.querySelectorAll('input[name="criteria"]'));
+        const performanceField = criteriaFields.find(input => input.value === 'PERFORMANCE');
+        const setupStatus = document.getElementById('test-setup-status');
+
+        function updateSelectionStatus() {
+            const count = criteriaFields.filter(input => input.checked && !input.disabled).length;
+            document.getElementById('sla-field').hidden = performanceField.disabled || !performanceField.checked;
+            document.getElementById('sla-threshold').disabled = performanceField.disabled || !performanceField.checked;
+            setupStatus.textContent = count ? `${count} kriter seçildi` : 'En az bir kriter seçin.';
         }
+
+        function updateGuide() {
+            const isApi = targetTypeField.value === 'API';
+            document.getElementById('target-label').textContent = isApi ? 'OpenAPI adresi' : 'Web sayfası adresi';
+            targetUrlField.placeholder = isApi ? 'https://ornek.test/openapi.json' : 'https://ornek.test/iletisim';
+            document.getElementById('guide-target').textContent = isApi
+                ? 'Test ortamındaki OpenAPI JSON veya YAML adresini kullan.'
+                : 'Kontrol edeceğin test sayfasının tam adresini kullan.';
+            document.getElementById('guide-criteria').textContent = isApi
+                ? 'İşlevsellikle başla. Şemaya göre sınır değerlerini, belgelenen erişim kurallarını ve yanıt süresini seçebilirsin.'
+                : 'Bağlantılar ve formlar için web doğrulamayı seç. Zorunlu alanlara odaklanmak için sınır değerlerini kullan.';
+            for (const input of criteriaFields) {
+                const card = input.closest('label');
+                const supported = card.dataset.targets.split(' ').includes(targetTypeField.value);
+                input.disabled = !supported;
+                card.hidden = !supported;
+                card.classList.toggle('flex', supported);
+            }
+            if (!criteriaFields.some(input => input.checked && !input.disabled)) {
+                criteriaFields.find(input => input.value === (isApi ? 'FUNCTIONAL' : 'WEB_VALIDATION')).checked = true;
+            }
+            updateSelectionStatus();
+        }
+
+        function setTarget(url, type) {
+            targetUrlField.value = url;
+            targetTypeField.value = type;
+            updateGuide();
+        }
+
+        targetTypeField.addEventListener('change', updateGuide);
+        for (const input of criteriaFields) input.addEventListener('change', updateSelectionStatus);
+        updateGuide();
 
         document.getElementById('hunt-form').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -265,8 +281,12 @@
             const targetType = document.getElementById('target-type').value;
             const slaThreshold = parseFloat(document.getElementById('sla-threshold').value) || 500.0;
 
-            const selectedCriteria = Array.from(document.querySelectorAll('input[name="criteria"]:checked'))
+            const selectedCriteria = Array.from(document.querySelectorAll('input[name="criteria"]:checked:not(:disabled)'))
                 .map(cb => cb.value);
+            if (!selectedCriteria.length) {
+                setupStatus.textContent = 'Testi başlatmak için en az bir kriter seçin.';
+                return;
+            }
 
             if (!url) {
                 alert("Lütfen geçerli bir hedef URL girin.");
@@ -289,10 +309,16 @@
                     })
                 });
 
-                const data = await response.json();
+                const isJson = (response.headers.get('content-type') || '').includes('application/json');
+                const data = isJson ? await response.json() : null;
+                if (!response.ok) {
+                    throw new Error(data && typeof data.detail === 'string'
+                        ? data.detail : `Sunucu isteği tamamlayamadı (HTTP ${response.status}).`);
+                }
+                if (!data) throw new Error('Sunucu geçerli bir test sonucu döndürmedi.');
                 renderResults(data);
             } catch (err) {
-                alert("Hata oluştu: " + err.message);
+                setupStatus.textContent = err.message;
             } finally {
                 document.getElementById('loading').classList.add('hidden');
                 document.getElementById('btn-start').disabled = false;
@@ -370,20 +396,24 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs bg-slate-50 p-4 rounded-lg border border-slate-200">
+                <details class="rounded-lg border border-slate-200 bg-slate-50">
+                    <summary class="cursor-pointer px-4 py-3 text-sm font-semibold">Bulgu ayrıntıları</summary>
+                    <div class="grid grid-cols-1 gap-4 px-4 pb-4 text-sm md:grid-cols-2">
                     <div>
                         <span class="font-bold text-emerald-800 block mb-1">Beklenen Davranış:</span>
-                        <p class="text-slate-600">${item.evidence.expected_behavior}</p>
+                        <p class="text-slate-600">${escapeHtml(item.evidence.expected_behavior)}</p>
                     </div>
                     <div>
                         <span class="font-bold text-rose-800 block mb-1">Gerçekleşen Davranış (Hata):</span>
-                        <p class="text-slate-600">${item.evidence.actual_behavior}</p>
+                        <p class="text-slate-600">${escapeHtml(item.evidence.actual_behavior)}</p>
                     </div>
                     <div class="md:col-span-2 pt-2 border-t border-slate-200">
                         <span class="font-bold text-slate-700 block mb-1">Kök Neden Analizi:</span>
-                        <p class="text-slate-600">${item.evidence.root_cause_hypothesis}</p>
+                        <p class="text-slate-600">${escapeHtml(item.evidence.root_cause_hypothesis)}</p>
                     </div>
                 </div>
+
+                </details>
 
                 <!-- Reproduction Code Accordion -->
                 <details class="text-xs bg-slate-900 text-slate-100 rounded-lg overflow-hidden border border-slate-800">

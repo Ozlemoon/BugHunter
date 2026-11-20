@@ -5,6 +5,7 @@ evidence exploration, human approval gate, and regression verification.
 """
 
 import os
+import httpx
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 from fastapi import FastAPI, HTTPException, Request
@@ -37,6 +38,22 @@ app = FastAPI(
 )
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+
+@app.exception_handler(httpx.RequestError)
+async def target_connection_error(request: Request, error: httpx.RequestError):
+    return JSONResponse(status_code=502, content={
+        "detail": "Hedefe bağlanılamadı. Adresi ve hedef uygulamanın çalıştığını kontrol edin. "
+                  "Demo hedefleri için proje klasöründe python main.py playground çalıştırın."
+    })
+
+
+@app.exception_handler(httpx.HTTPStatusError)
+async def target_http_error(request: Request, error: httpx.HTTPStatusError):
+    return JSONResponse(status_code=502, content={
+        "detail": f"Hedef belge HTTP {error.response.status_code} döndürdü. "
+                  "OpenAPI adresini ve erişim gereksinimlerini kontrol edin."
+    })
 
 # Global in-memory state for active session
 approval_gate = HumanApprovalGate()
@@ -134,7 +151,7 @@ async def run_hunt(payload: HuntRequest):
 
     # Determine default target source file for demo playground if running locally
     target_file = "playground/sample_api.py" if target_type == TargetType.API else "playground/sample_web.py"
-    target_file_abs = os.path.abspath(target_file)
+    target_file_abs = str(BASE_DIR.parent / target_file)
 
     for test in tests:
         res = next((r for r in results if r.test_id == test.id), None)
