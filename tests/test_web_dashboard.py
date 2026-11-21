@@ -141,3 +141,13 @@ def test_findings_carry_remediation_and_page_groups_by_risk(client, api_copy):
     html = TestClient(web_app.app).get("/").text
     for text in ("Yüksek riskli bulgular", "Düşük riskli ve bilgi amaçlı", "Çözüm önerisi", "text-rose-700"):
         assert text in html
+
+
+def test_run_payload_exposes_error_sources_and_advice(client, api_copy):
+    data = start(client, api_copy)
+    assert data["recommendations"][0]["advice"] and data["recommendations"][0]["locations"]
+    first = data["findings"][0]["remediation"]
+    assert first["source_label"] and first["source_side"] and first["location"]
+    html = TestClient(web_app.app).get("/").text
+    for text in ("Tavsiyeler ve hata kaynakları", "Hatanın kaynağı", 'id="url-hint"', 'role="radiogroup"'):
+        assert text in html

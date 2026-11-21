@@ -108,6 +108,7 @@ def run_payload(run: HuntRun) -> Dict[str, Any]:
         "base_url": run.base_url,
         "summary": {**run.summary.model_dump(), "target_type": run.config.target_type.value},
         "findings": [f.model_dump(mode="json") for f in run.findings],
+        "recommendations": [r.model_dump(mode="json") for r in run.recommendations],
         "results": [
             {
                 "test_id": t.id,
