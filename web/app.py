@@ -274,12 +274,17 @@ def ask_documents(payload: RagQuestion):
     if not question:
         raise HTTPException(status_code=422, detail="Bir soru yazın.")
     try:
-        from core.rag import DocumentIndex
+        from core.rag import DocumentIndex, StaleIndexError
         from core.rag_answer import answer_question
 
         settings = get_settings()
-        store = DocumentIndex(settings.rag_db)
-        return answer_question(store, question, top_k=6, top_n=3, model=settings.rag_chat_model)
+        try:
+            store = DocumentIndex(settings.rag_db)
+            return answer_question(store, question, top_k=6, top_n=3, model=settings.rag_chat_model)
+        except StaleIndexError:
+            # Documents were re-indexed from the CLI while the dashboard was running.
+            store = DocumentIndex(settings.rag_db, fresh=True)
+            return answer_question(store, question, top_k=6, top_n=3, model=settings.rag_chat_model)
     except ImportError as error:
         raise HTTPException(status_code=503, detail="RAG bağımlılıkları kurulu değil.") from error
     except RuntimeError as error:

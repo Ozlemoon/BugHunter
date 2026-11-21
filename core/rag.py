@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 
 import chromadb
@@ -11,8 +12,82 @@ import httpx
 from core.config import get_settings
 
 
+def split_passages(content: str, chunk_size: int = 600, overlap: int = 100) -> list[tuple[int, str]]:
+    """
+    Splits a document into (start_offset, passage) pairs that follow its structure:
+
+    - each paragraph (blank-line separated) is its own passage, so one topic is
+      never glued to the next; only short pieces such as headings are merged
+      into the paragraph that follows them
+    - a paragraph longer than `chunk_size` is split at sentence ends
+    - a single sentence longer than `chunk_size` falls back to overlapping windows
+
+    Every passage is an exact slice of `content` starting at its offset.
+    """
+    short = chunk_size // 4
+    pieces: list[tuple[int, int, bool]] = []  # (start, end, is_whole_paragraph)
+    for match in re.finditer(r"\S(?:.*?\S)?(?=\n\s*\n|\Z)", content, flags=re.S):
+        start, end = match.span()
+        if end - start <= chunk_size:
+            pieces.append((start, end, True))
+        else:
+            pieces.extend((s, e, False) for s, e in _split_long(content, start, end, chunk_size, overlap))
+
+    chunks: list[tuple[int, str]] = []
+    current: tuple[int, int] | None = None
+    current_is_heading = False
+    for start, end, whole in pieces:
+        if current and current_is_heading and end - current[0] <= chunk_size:
+            current = (current[0], end)  # attach a heading to the paragraph below it
+            current_is_heading = False
+            continue
+        if current:
+            chunks.append((current[0], content[current[0]:current[1]]))
+        current = (start, end)
+        current_is_heading = whole and end - start <= short
+    if current:
+        chunks.append((current[0], content[current[0]:current[1]]))
+    return chunks
+
+
+def _split_long(content: str, start: int, end: int, chunk_size: int, overlap: int) -> list[tuple[int, int]]:
+    """Packs whole sentences of content[start:end] into spans of at most chunk_size."""
+    sentences = [(start + m.start(), start + m.end())
+                 for m in re.finditer(r"\S.*?(?:[.!?](?=\s)|$)", content[start:end], flags=re.S)]
+    spans: list[tuple[int, int]] = []
+    current: tuple[int, int] | None = None
+    for s_start, s_end in sentences:
+        if s_end - s_start > chunk_size:
+            if current:
+                spans.append(current)
+                current = None
+            step = chunk_size - overlap
+            for offset in range(s_start, s_end, step):
+                spans.append((offset, min(offset + chunk_size, s_end)))
+                if offset + chunk_size >= s_end:
+                    break
+            continue
+        if current and s_end - current[0] > chunk_size:
+            spans.append(current)
+            current = None
+        current = (current[0], s_end) if current else (s_start, s_end)
+    if current:
+        spans.append(current)
+    return spans
+
+
+class StaleIndexError(RuntimeError):
+    """This process' cached view of the index is older than what another process wrote."""
+
+
 class DocumentIndex:
-    def __init__(self, database: Path):
+    def __init__(self, database: Path, fresh: bool = False):
+        if fresh:
+            # Chroma caches one client per path per process; drop it to see writes made by
+            # another process (e.g. `main.py rag index` while the dashboard is running).
+            from chromadb.api.client import SharedSystemClient
+
+            SharedSystemClient.clear_system_cache()
         client = chromadb.PersistentClient(path=str(database))
         self.collection = client.get_or_create_collection(
             "bughunter-embeddinggemma",
@@ -56,15 +131,8 @@ class DocumentIndex:
 
         path = path.resolve()
         source = str(path)
-        content = path.read_text(encoding="utf-8-sig").strip()
-        chunks = []
-        for start in range(0, len(content), chunk_size - overlap):
-            end = start + chunk_size
-            passage = content[start:end]
-            if passage.strip():
-                chunks.append((start, passage))
-            if end >= len(content):
-                break
+        content = path.read_text(encoding="utf-8-sig").replace("\r\n", "\n").strip()
+        chunks = split_passages(content, chunk_size, overlap)
         if not chunks:
             raise ValueError(f"Belge boş: {path.name}")
 
@@ -101,12 +169,10 @@ class DocumentIndex:
             n_results=min(top_k, count),
             include=["documents", "metadatas", "distances"],
         )
-        return [
-            {**metadata, "text": text, "similarity": 1.0 - distance}
-            for metadata, text, distance in zip(
-                results["metadatas"][0], results["documents"][0], results["distances"][0]
-            )
-        ]
+        rows = list(zip(results["metadatas"][0], results["documents"][0], results["distances"][0]))
+        if any(metadata is None or text is None for metadata, text, _ in rows):
+            raise StaleIndexError("Belge indeksi başka bir süreç tarafından güncellendi.")
+        return [{**metadata, "text": text, "similarity": 1.0 - distance} for metadata, text, distance in rows]
 
 
 def main() -> None:

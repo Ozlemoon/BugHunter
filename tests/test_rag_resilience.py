@@ -3,6 +3,7 @@ from unittest import TestCase
 from unittest.mock import Mock, patch
 
 import httpx
+import pytest
 
 from core.rag import DocumentIndex
 from core.rag_answer import EvidenceSelection, answer_question
@@ -69,3 +70,51 @@ def test_rerank_prefers_passages_covering_question_words():
     matching = {"text": "The contact form shows a confirmation.", "similarity": 0.80}
     ranked = rerank_passages("What does the contact form show?", [unrelated, matching])
     assert ranked[0] is matching
+
+
+def test_passages_follow_paragraph_boundaries():
+    from core.rag import split_passages
+
+    heading = "Kılavuz"
+    first = "Soru bir nedir? Cevap bir budur, açıkça yazılmıştır."
+    second = "Soru iki nedir? Cevap iki budur, açıkça yazılmıştır."
+    document = f"{heading}\n\n{first}\n\n{second}"
+
+    chunks = split_passages(document, chunk_size=100)
+    assert [t for _, t in chunks] == [f"{heading}\n\n{first}", second]  # heading joins, topics stay apart
+    assert all(document[start:start + len(text)] == text for start, text in chunks)
+
+
+def test_long_paragraphs_split_at_sentence_ends():
+    from core.rag import split_passages
+
+    paragraph = " ".join(f"Cümle {i} burada biter." for i in range(1, 9))
+    texts = [t for _, t in split_passages(paragraph, chunk_size=60, overlap=10)]
+    assert len(texts) > 1
+    assert all(t.endswith(".") and t.startswith("Cümle") for t in texts)
+
+
+def test_single_huge_sentence_still_indexed_with_windows():
+    from core.rag import split_passages
+
+    document = "x" * 250
+    chunks = split_passages(document, chunk_size=100, overlap=20)
+    assert all(document[start:start + len(text)] == text for start, text in chunks)
+    assert chunks[0][1] == "x" * 100 and chunks[-1][0] + len(chunks[-1][1]) == 250
+
+
+def test_stale_index_rows_raise_a_specific_error():
+    from core.rag import StaleIndexError
+
+    store = DocumentIndex.__new__(DocumentIndex)
+    store.collection = Mock()
+    store.collection.count.return_value = 2
+    store.collection.query.return_value = {
+        "metadatas": [[{"filename": "a.txt", "chunk": 1}, None]],
+        "documents": [["metin", None]],
+        "distances": [[0.1, 0.2]],
+    }
+    with patch.object(DocumentIndex, "embed", return_value=[[0.1]]):
+        with pytest.raises(StaleIndexError):
+            store.search("soru")
+
