@@ -15,6 +15,13 @@ from core.models import FormFieldSpec, WebFormSpec, WebLinkSpec, WebPageSpec
 SKIPPED_SCHEMES = ("javascript:", "mailto:", "tel:", "data:", "#")
 
 
+def _normalise(url: str) -> str:
+    """Drops the fragment and writes an empty path as '/', so one page is never counted twice."""
+    url = urldefrag(url)[0]
+    parsed = urlparse(url)
+    return parsed._replace(path=parsed.path or "/").geturl()
+
+
 class WebTargetParser:
     """Extracts testable components from HTML web pages."""
 
@@ -61,7 +68,7 @@ class WebTargetParser:
         if max_pages <= 1:
             return root
         origin = urlparse(self.target_url).netloc
-        visited = {urldefrag(self.target_url)[0]}
+        visited = {_normalise(self.target_url)}
         queue = [link.href for link in root.links if urlparse(link.href).netloc == origin]
         links = {link.href: link for link in root.links}
         assets = {asset.href: asset for asset in root.assets}
@@ -113,7 +120,7 @@ class WebTargetParser:
             href = a_tag["href"].strip()
             if not href or href.lower().startswith(SKIPPED_SCHEMES):
                 continue
-            abs_href = urldefrag(urljoin(self.target_url, href))[0]
+            abs_href = _normalise(urljoin(self.target_url, href))
             if abs_href in seen_links:
                 continue
             seen_links.add(abs_href)
@@ -155,9 +162,13 @@ class WebTargetParser:
         # Extract forms
         forms = []
         for form in soup.find_all("form"):
-            action = form.get("action", "")
-            abs_action = urljoin(self.target_url, action) if action else self.target_url
-            method = form.get("method", "POST").upper()
+            if not form.has_attr("action") and not form.has_attr("method"):
+                continue  # handled by JavaScript; submitting it to the server would test nothing real
+            action = (form.get("action") or "").strip()
+            abs_action = _normalise(urljoin(self.target_url, action) if action else self.target_url)
+            method = (form.get("method") or "GET").upper()  # the HTML default is GET
+            if method not in ("GET", "POST"):
+                method = "GET"
 
             fields = []
             for inp in form.find_all(["input", "textarea", "select"]):

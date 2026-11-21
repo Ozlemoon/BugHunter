@@ -167,3 +167,19 @@ def test_reproduction_script_is_valid_python_and_flags_the_bug(api_copy):
     script = BugAnalyzer().analyze_failure(test, result).reproduction_code
     compile(script, "reproduce_bug.py", "exec")
     assert "sys.exit(1 if problems else 0)" in script
+
+
+def test_javascript_forms_are_skipped_and_html_defaults_apply():
+    parser = WebTargetParser("https://shop.example")
+    parser.raw_html = """
+      <a href="/">Home</a><a href="https://shop.example">Home again</a><a href="/#top">Top</a>
+      <form id="spa-login"><input name="user"></form>
+      <form action="/search"><input name="q"></form>
+      <form method="post"><input name="email"></form>
+    """
+    spec = parser.parse()
+    assert [link.href for link in spec.links] == ["https://shop.example/"]
+    assert [(f.action, f.method) for f in spec.forms] == [
+        ("https://shop.example/search", "GET"),   # no method attribute -> GET
+        ("https://shop.example/", "POST"),        # no action -> current page
+    ]
