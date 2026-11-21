@@ -29,3 +29,15 @@ Sürekli entegrasyon için "python main.py scan" komutu kullanılır. Bu komut s
 
 Panel "Not Found" hatası verirse ne yapılmalı?
 Panel sayfası açık ama arkadaki sunucu eski bir sürümle çalışıyorsa "Panel sunucusu güncel değil" uyarısı görünür. Bu durumda paneli çalıştıran terminalde Ctrl+C ile sunucu durdurulur ve proje klasöründe ".venv\Scripts\python main.py web" komutuyla yeniden başlatılır, ardından sayfa yenilenir.
+
+Hedef adresi panelde nasıl girilir?
+Panelin en üstündeki bölümde önce "REST API" veya "Web sitesi" sekmesi seçilir, ardından adres çubuğuna hedef yazılır ve yanındaki "Testi başlat" düğmesine basılır. Adres yazılırken altında anında açıklama görünür: başına https:// ekleneceği, adresin geçersiz olduğu veya ftp: gibi desteklenmeyen bir şema kullanıldığı söylenir. REST API sekmesinde verilen adres bir OpenAPI belgesi değilse ".../openapi.json gerekir" uyarısı çıkar. Test başlatılamazsa sebebi adres çubuğunun altında kırmızı yazıyla gösterilir. Swagger Petstore, quotes.toscrape.com ve iki yerel demo için hazır örnek düğmeleri vardır.
+
+Bulgular risk seviyesine göre nasıl gruplanır?
+Sonuçlar üç grupta gösterilir. CRITICAL ve HIGH bulgular "Yüksek riskli bulgular" grubunda en üsttedir ve önce düzeltilmelidir. MEDIUM bulgular "Orta riskli bulgular" grubundadır ve planlı olarak ele alınır. LOW bulgular "Düşük riskli ve bilgi amaçlı" grubundadır; bunlar isteğe bağlı iyileştirmeler ve muhtemel yanlış alarmlardır. Her bulgunun altında risk açıklaması ve çözüm önerisi bulunur.
+
+Hatanın kaynağı ve yeri nasıl gösterilir?
+Her bulguda "Hatanın kaynağı" ve "Nerede" satırları vardır. "Hatanın kaynağı" hatanın türünü ve sistemin hangi tarafında olduğunu söyler, örneğin "Eksik girdi doğrulaması · Sunucu tarafı · istek doğrulama". "Nerede" değiştirilmesi gereken yeri söyler, örneğin "POST /orders işleyicisi · negatif kabul edilen alanlar: quantity" veya "/search sayfasının HTML çıktısı · yansıyan parametre: q". Kaynak türleri şunlardır: işlenmemiş sunucu hatası, eksik girdi doğrulaması, kimlik doğrulama veya yetkilendirme, çıktı kaçışlama (XSS), sunucu yapılandırması, API belgesiyle uyuşmazlık, performans, kırık bağlantı, ağ sorunu ve test verisi.
+
+Tavsiyeler ve hata kaynakları bölümü nedir?
+Panelde, HTML raporda ve hunt ile scan komutlarının çıktısında sonuçların en üstünde "Tavsiyeler ve hata kaynakları" bölümü bulunur. Bu bölüm bulguları kaynaklarına göre gruplar ve en acil olanı başa koyar. Her grupta genel bir tavsiye ve etkilenen yerlerin listesi verilir. Uydurma bir kimlikle alınan 404 gibi sonuçlar "Test yapılandırması (uygulama hatası değil)" olarak ayrı gösterilir; bunlar uygulamanın değil test verisinin sorunudur.
