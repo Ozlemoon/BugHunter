@@ -34,6 +34,7 @@ from core.models import (
     TestResult,
 )
 from core.patcher import CodePatcher, HumanApprovalGate
+from core.remediation import Remediation, advise
 from core.runner import TestRunner
 from core.storage import RunStore
 from core.targets.api_target import ApiTargetParser
@@ -125,6 +126,7 @@ class HuntConfig(BaseModel):
 
 class Finding(BaseModel):
     evidence: BugEvidence
+    remediation: Optional[Remediation] = None
     proposal: Optional[FixProposal] = None
     verification: Optional[RegressionReport] = None
 
@@ -287,9 +289,13 @@ class HuntSession:
                 if result.passed:
                     continue
                 evidence = self.analyzer.analyze_failure(test, result)
+                remediation = advise(test, result, evidence)
+                evidence.severity = remediation.severity  # likely false alarms are not ranked as risks
                 proposal = self.patcher.generate_fix(evidence, source_file) if source_file else None
-                run.findings.append(Finding(evidence=evidence, proposal=proposal))
-            run.findings.sort(key=lambda f: -f.evidence.severity.rank)
+                run.findings.append(Finding(evidence=evidence, remediation=remediation, proposal=proposal))
+            # Highest risk first; inside a level, real problems before "probably nothing" notes.
+            run.findings.sort(key=lambda f: (-f.evidence.severity.rank,
+                                             not (f.remediation.noteworthy if f.remediation else True)))
 
             run.finished_at = datetime.now(timezone.utc)
             run.summary = summarize(run)
