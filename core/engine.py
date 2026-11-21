@@ -6,6 +6,7 @@ pipeline shared by the web dashboard, the interactive CLI and headless CI scans.
 from __future__ import annotations
 
 import logging
+import re
 import threading
 import time
 import uuid
@@ -44,6 +45,52 @@ logger = logging.getLogger(__name__)
 ClientFactory = Callable[[], httpx.Client]
 
 
+def normalise_target_url(value: str) -> str:
+    """
+    Accepts what people actually type: 'example.com/docs' becomes 'https://example.com/docs'.
+    Local OpenAPI files (existing paths) are left untouched.
+    """
+    from urllib.parse import urlparse
+
+    value = value.strip()
+    if not value:
+        raise ValueError("Bir hedef adresi girin.")
+    if "://" not in value:
+        if Path(value).is_file():
+            return value
+        # 'javascript:…', 'mailto:…' are schemes; 'localhost:8000' is host:port.
+        if re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:(?!\d)", value):
+            raise ValueError("Adres http:// veya https:// ile başlamalı.")
+        value = f"https://{value.lstrip('/')}"
+    parsed = urlparse(value)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError("Adres http:// veya https:// ile başlamalı.")
+    try:
+        parsed.port  # noqa: B018 - raises ValueError on a malformed port
+    except ValueError as error:
+        raise ValueError(f"Geçersiz adres: {value}") from error
+    if not parsed.hostname or " " in parsed.netloc:
+        raise ValueError(f"Geçersiz adres: {value}")
+    return value
+
+
+def describe_connection_error(error: httpx.RequestError) -> str:
+    """Turns transport errors into a reason a non-expert can act on."""
+    url = str(error.request.url) if getattr(error, "_request", None) is not None else "hedef"
+    text = str(error).lower()
+    if isinstance(error, httpx.TimeoutException):
+        reason = "Hedef zamanında yanıt vermedi (zaman aşımı). Site yavaş olabilir; BUGHUNTER_REQUEST_TIMEOUT değerini artırın."
+    elif "getaddrinfo" in text or "name or service not known" in text or "nodename nor servname" in text:
+        reason = "Alan adı bulunamadı. Adresi yazım hatasına karşı kontrol edin."
+    elif "certificate" in text or "ssl" in text:
+        reason = "SSL/TLS sertifikası doğrulanamadı."
+    elif "refused" in text or "10061" in text:
+        reason = "Bağlantı reddedildi; bu adreste çalışan bir sunucu yok."
+    else:
+        reason = f"Bağlantı kurulamadı ({type(error).__name__})."
+    return f"{url}: {reason}"
+
+
 class HuntConfig(BaseModel):
     target_url: str = Field(min_length=1, max_length=2048)
     target_type: TargetType = TargetType.API
@@ -56,8 +103,8 @@ class HuntConfig(BaseModel):
 
     @field_validator("target_url")
     @classmethod
-    def _strip(cls, value: str) -> str:
-        return value.strip()
+    def _normalise_url(cls, value: str) -> str:
+        return normalise_target_url(value)
 
     @field_validator("auth_header", "source_file")
     @classmethod

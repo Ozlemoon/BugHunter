@@ -24,7 +24,7 @@ from rich.table import Table
 
 from core import reporting
 from core.config import get_settings
-from core.engine import HuntConfig, HuntRun, HuntSession, playground_source_for
+from core.engine import HuntConfig, HuntRun, HuntSession, describe_connection_error, playground_source_for
 from core.generator import ALL_CRITERIA
 from core.models import Severity, TargetType, TestCriterion
 from core.patcher import PatchConflictError
@@ -58,15 +58,18 @@ def build_config(args: argparse.Namespace, with_source: bool) -> HuntConfig:
     source = getattr(args, "source", None) if with_source else None
     if with_source and source is None:
         source = playground_source_for(args.url, target_type, get_settings())
-    return HuntConfig(
-        target_url=args.url,
-        target_type=target_type,
-        criteria=criteria,
-        sla_threshold_ms=args.sla,
-        auth_header=args.auth,
-        source_file=source,
-        crawl_pages=args.crawl_pages,
-    )
+    try:
+        return HuntConfig(
+            target_url=args.url,
+            target_type=target_type,
+            criteria=criteria,
+            sla_threshold_ms=args.sla,
+            auth_header=args.auth,
+            source_file=source,
+            crawl_pages=args.crawl_pages,
+        )
+    except ValueError as error:
+        raise SystemExit(f"Geçersiz yapılandırma: {error}") from error
 
 
 def execute(session: HuntSession, config: HuntConfig, quiet: bool = False) -> Optional[HuntRun]:
@@ -86,8 +89,7 @@ def execute(session: HuntSession, config: HuntConfig, quiet: bool = False) -> Op
 
             return session.start(config, on_result=on_result, on_plan=on_plan)
     except httpx.RequestError as error:
-        console.print(f"[red]✖ Hedefe bağlanılamadı:[/red] {error}. "
-                      "Demo hedefleri için: [bold]python main.py playground[/bold]")
+        console.print(f"[red]✖ {describe_connection_error(error)}[/red]")
     except httpx.HTTPStatusError as error:
         console.print(f"[red]✖ Hedef HTTP {error.response.status_code} döndürdü:[/red] {error.request.url}")
     except (SpecError, ValueError, OSError) as error:

@@ -143,3 +143,39 @@ def test_repro_script_reads_credentials_from_environment(api_copy, tmp_path):
     script = finding.evidence.reproduction_code
     assert "os.environ['BUGHUNTER_AUTH_HEADER']" in script
     compile(script, "reproduce_bug.py", "exec")
+
+
+@pytest.mark.parametrize("typed, expected", [
+    ("quotes.toscrape.com", "https://quotes.toscrape.com"),
+    ("  example.com/docs/openapi.json ", "https://example.com/docs/openapi.json"),
+    ("http://127.0.0.1:8001/openapi.json", "http://127.0.0.1:8001/openapi.json"),
+])
+def test_target_urls_are_normalised(typed, expected):
+    assert HuntConfig(target_url=typed).target_url == expected
+
+
+@pytest.mark.parametrize("bad", ["ftp://example.com", "javascript:alert(1)", "   ", "https://"])
+def test_invalid_target_urls_are_rejected(bad):
+    with pytest.raises(ValueError):
+        HuntConfig(target_url=bad)
+
+
+def test_local_spec_files_are_not_turned_into_urls(api_copy):
+    assert HuntConfig(target_url=str(api_copy)).target_url == str(api_copy)
+
+
+def test_connection_errors_are_explained():
+    import httpx
+
+    from core.engine import describe_connection_error
+
+    request = httpx.Request("GET", "https://nope.invalid/")
+    dns = httpx.ConnectError("[Errno 11001] getaddrinfo failed", request=request)
+    timeout = httpx.ReadTimeout("timed out", request=request)
+    assert "Alan adı bulunamadı" in describe_connection_error(dns)
+    assert "zaman aşımı" in describe_connection_error(timeout)
+    assert "https://nope.invalid/" in describe_connection_error(dns)
+
+
+def test_host_and_port_without_scheme_is_accepted():
+    assert HuntConfig(target_url="localhost:8002/").target_url == "https://localhost:8002/"

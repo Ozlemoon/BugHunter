@@ -21,7 +21,14 @@ from pydantic import BaseModel, Field
 
 from core import reporting
 from core.config import get_settings
-from core.engine import HuntConfig, HuntRun, HuntSession, playground_source_for, resolve_source_file
+from core.engine import (
+    HuntConfig,
+    HuntRun,
+    HuntSession,
+    describe_connection_error,
+    playground_source_for,
+    resolve_source_file,
+)
 from core.generator import ALL_CRITERIA
 from core.models import TargetType
 from core.patcher import PatchConflictError
@@ -66,17 +73,14 @@ async def security_middleware(request: Request, call_next):
 
 @app.exception_handler(httpx.RequestError)
 async def target_connection_error(request: Request, error: httpx.RequestError):
-    return JSONResponse(status_code=502, content={
-        "detail": "Hedefe bağlanılamadı. Adresi ve hedef uygulamanın çalıştığını kontrol edin. "
-                  "Demo hedefleri için proje klasöründe python main.py playground çalıştırın."
-    })
+    return JSONResponse(status_code=502, content={"detail": describe_connection_error(error)})
 
 
 @app.exception_handler(httpx.HTTPStatusError)
 async def target_http_error(request: Request, error: httpx.HTTPStatusError):
     return JSONResponse(status_code=502, content={
-        "detail": f"Hedef HTTP {error.response.status_code} döndürdü. "
-                  "Adresi ve erişim gereksinimlerini kontrol edin."
+        "detail": f"{error.request.url} adresi HTTP {error.response.status_code} döndürdü. "
+                  "Adresi ve erişim gereksinimlerini (ör. Authorization) kontrol edin."
     })
 
 
