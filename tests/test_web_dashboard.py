@@ -125,3 +125,9 @@ def test_unreachable_target_returns_502(tmp_path, monkeypatch):
     monkeypatch.setattr(web_app, "session", HuntSession(settings=Settings(reports_dir=tmp_path)))
     response = TestClient(web_app.app).post("/api/runs", json={"target_url": "http://127.0.0.1:9/openapi.json"})
     assert response.status_code == 502
+
+
+def test_page_declares_its_version_so_a_stale_server_is_detected():
+    html = TestClient(web_app.app).get("/").text
+    assert f'data-version="{web_app.__version__}"' in html
+    assert 'id="server-warning"' in html

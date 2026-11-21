@@ -156,7 +156,7 @@ def _fix_action(action, run_id: str, fix_id: str):
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
-    return templates.TemplateResponse(request=request, name="dashboard.html")
+    return templates.TemplateResponse(request=request, name="dashboard.html", context={"version": __version__})
 
 
 @app.get("/healthz")
