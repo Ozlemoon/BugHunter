@@ -23,6 +23,17 @@ PRIORITY = {
 }
 
 
+RECORD_CRASH_EXAMPLE = (
+    "record = DB.get(item_id)\n"
+    "if record is None:\n"
+    '    raise HTTPException(status_code=404, detail="Kayıt bulunamadı")'
+)
+FORM_CRASH_EXAMPLE = (
+    'if not email or "@" not in email:\n'
+    '    raise HTTPException(status_code=422, detail="Geçerli bir e-posta adresi girin")'
+)
+
+
 class Remediation(BaseModel):
     headline: str                       # Turkish one-line description of the problem
     severity: Severity                  # final risk (lowered to LOW when not noteworthy)
@@ -95,9 +106,7 @@ def advise(test: TestCase, result: TestResult, evidence: BugEvidence) -> Remedia
              "Hatanın kaynağı olan girdiyi doğrulayın: eksik kayıt → 404, geçersiz veri → 400/422.",
              "Sözlük/dizi erişimlerini varlık kontrolüyle yapın (ör. `.get()` veya `in`).",
              "Kanıt scriptini (reproduce_bug.py) çalıştırarak düzeltmeyi doğrulayın; 0 ile bitmeli."],
-            example=('record = DB.get(item_id)\n'
-                     'if record is None:\n'
-                     '    raise HTTPException(status_code=404, detail="Kayıt bulunamadı")'),
+            example=FORM_CRASH_EXAMPLE if "forms" in tags else RECORD_CRASH_EXAMPLE,
             language="python",
         )
 

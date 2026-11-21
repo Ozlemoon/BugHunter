@@ -236,8 +236,8 @@ FIX_RULES: List[FixRule] = [
         replacement='    if order.quantity <= 0:\n'
                     '        raise HTTPException(status_code=422, detail="Quantity must be greater than zero")\n'
                     '    total_price = product["price"] * order.quantity',
-        explanation="Added validation check ensuring order.quantity > 0, rejecting negative "
-                    "or zero quantities with HTTP 422 Unprocessable Entity.",
+        explanation="Sipariş adedinin sıfırdan büyük olduğu kontrol edilir; negatif veya sıfır adet "
+                    "HTTP 422 ile reddedilir.",
     ),
     FixRule(
         name="product-values-must-be-non-negative",
@@ -247,7 +247,7 @@ FIX_RULES: List[FixRule] = [
         replacement="    if product.price < 0 or product.stock < 0:\n"
                     '        raise HTTPException(status_code=422, detail="Price and stock must not be negative")\n'
                     "    new_id = max(PRODUCTS_DB.keys(), default=0) + 1",
-        explanation="Rejects negative price or stock with HTTP 422 before the product is stored.",
+        explanation="Ürün kaydedilmeden önce negatif fiyat veya stok HTTP 422 ile reddedilir.",
     ),
     FixRule(
         name="missing-profile-returns-404",
@@ -256,8 +256,8 @@ FIX_RULES: List[FixRule] = [
         replacement="    if user_id not in USER_PROFILES_DB:\n"
                     '        raise HTTPException(status_code=404, detail="User profile not found")\n'
                     "    profile_data = USER_PROFILES_DB[user_id]",
-        explanation="Replaced direct unchecked dictionary access with existence verification; "
-                    "returns clean HTTP 404 Not Found instead of crashing with 500 KeyError.",
+        explanation="Kontrolsüz sözlük erişimi yerine önce profilin varlığı kontrol edilir; "
+                    "500 KeyError yerine HTTP 404 döner.",
     ),
     FixRule(
         name="delete-product-requires-admin",
@@ -267,8 +267,8 @@ FIX_RULES: List[FixRule] = [
         replacement='    if authorization != "Bearer admin-token":\n'
                     '        raise HTTPException(status_code=401, detail="Unauthorized: Admin bearer token required")\n'
                     "    deleted = PRODUCTS_DB.pop(product_id)",
-        explanation="Enforced mandatory Authorization check requiring valid admin bearer token "
-                    "before allowing destructive DELETE operations, returning 401 Unauthorized.",
+        explanation="Silme işleminden önce geçerli bir yönetici token'ı zorunlu tutulur; "
+                    "yoksa HTTP 401 döner.",
     ),
     FixRule(
         name="contact-email-must-contain-at",
@@ -277,15 +277,15 @@ FIX_RULES: List[FixRule] = [
         replacement='    if not email or "@" not in email:\n'
                     "        raise HTTPException(status_code=422, detail=\"Valid email address with '@' symbol is required\")\n"
                     '    domain = email.split("@")[1]',
-        explanation="Added validation to verify presence of '@' in email string, returning HTTP 422 "
-                    "validation error instead of crashing the server with 500 IndexError.",
+        explanation="E-postada '@' olup olmadığı kontrol edilir; sunucu 500 IndexError ile çökmek "
+                    "yerine HTTP 422 doğrulama hatası döner.",
     ),
     FixRule(
         name="escape-search-query",
         matches=lambda e: "xss" in e.tags and _endpoint(e) == "/search",
         anchor='    heading = f"<h1>Results for {q}</h1>"',
         replacement='    heading = f"<h1>Results for {html.escape(q)}</h1>"',
-        explanation="HTML-escapes the search query before rendering it, closing the reflected XSS hole.",
+        explanation="Arama sorgusu sayfaya yazılmadan önce HTML kaçışlanır; yansıyan XSS açığı kapanır.",
     ),
     FixRule(
         name="add-security-headers-middleware",
@@ -302,8 +302,8 @@ FIX_RULES: List[FixRule] = [
                     '    response.headers.setdefault("Content-Security-Policy", '
                     "\"default-src 'self'; style-src 'self' 'unsafe-inline'\")\n"
                     "    return response",
-        explanation="Adds a middleware that sends X-Content-Type-Options, X-Frame-Options and a "
-                    "Content-Security-Policy on every response.",
+        explanation="Her yanıta X-Content-Type-Options, X-Frame-Options ve Content-Security-Policy "
+                    "başlıklarını ekleyen bir ara katman (middleware) eklenir.",
     ),
 ]
 
@@ -344,7 +344,7 @@ class CodePatcher:
         for rule in self.rules:
             if rule.matches(evidence) and code.count(rule.anchor) == 1:
                 return code.replace(rule.anchor, rule.replacement, 1), rule.explanation, rule.name
-        return code, "No safe automatic fix is known for this defect; review the evidence manually.", None
+        return code, "Bu bulgu için güvenli bir otomatik yama yok; çözüm önerisini izleyin.", None
 
     def _create_unified_diff(self, original_code: str, fixed_code: str, filepath: str) -> str:
         """Generates standard unified diff output (empty string when nothing changes)."""
