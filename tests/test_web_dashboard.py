@@ -131,3 +131,13 @@ def test_page_declares_its_version_so_a_stale_server_is_detected():
     html = TestClient(web_app.app).get("/").text
     assert f'data-version="{web_app.__version__}"' in html
     assert 'id="server-warning"' in html
+
+
+def test_findings_carry_remediation_and_page_groups_by_risk(client, api_copy):
+    data = start(client, api_copy)
+    first = data["findings"][0]
+    assert first["evidence"]["severity"] == "CRITICAL"
+    assert first["remediation"]["headline"] and first["remediation"]["steps"]
+    html = TestClient(web_app.app).get("/").text
+    for text in ("Yüksek riskli bulgular", "Düşük riskli ve bilgi amaçlı", "Çözüm önerisi", "text-rose-700"):
+        assert text in html

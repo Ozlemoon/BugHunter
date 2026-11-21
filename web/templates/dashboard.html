@@ -173,7 +173,7 @@
                 <div class="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-4">
                     <div>
                         <h3 class="text-base font-bold text-slate-900">Bulgular ve düzeltme önerileri</h3>
-                        <p class="text-xs text-slate-500">Önem derecesine göre sıralı.</p>
+                        <p class="text-xs text-slate-500">Yüksek riskler en üstte; her bulgunun altında çözüm önerisi var.</p>
                     </div>
                     <span id="queue-badge" class="rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-800">0 bulgu</span>
                 </div>
@@ -233,22 +233,31 @@
     </main>
 
     <template id="finding-template">
-        <article class="space-y-4 p-6">
+        <article class="space-y-4 border-l-4 p-6">
             <div class="flex flex-wrap items-start justify-between gap-2">
                 <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-2">
                         <span data-field="severity" class="rounded px-2 py-0.5 text-xs font-bold"></span>
+                        <span data-field="priority" class="text-xs font-semibold"></span>
                         <span data-field="criterion" class="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700"></span>
-                        <span data-field="bug-id" class="font-mono text-xs text-slate-500"></span>
+                        <span data-field="ignorable" hidden class="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">Muhtemelen dikkate değer değil</span>
                     </div>
-                    <h4 data-field="title" class="mt-1 text-base font-bold text-slate-900"></h4>
+                    <h4 data-field="title" class="mt-1 text-base font-bold"></h4>
                     <p data-field="request" class="mt-0.5 break-all font-mono text-xs text-slate-600"></p>
                 </div>
                 <span data-field="status" class="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600"></span>
             </div>
+            <section data-section="advice" class="rounded-lg border border-slate-200 bg-white p-4 text-sm">
+                <h5 class="font-bold text-slate-900">Çözüm önerisi</h5>
+                <p data-field="action" class="mt-1 text-slate-700"></p>
+                <ol data-field="steps" class="mt-2 list-decimal space-y-1 pl-5 text-slate-700"></ol>
+                <pre data-field="example" hidden class="mt-3 overflow-x-auto rounded bg-slate-900 p-3 text-[11px] text-emerald-200"></pre>
+                <p data-field="note" hidden class="mt-3 rounded border border-slate-200 bg-slate-50 p-2 text-xs text-slate-600"></p>
+            </section>
             <details class="rounded-lg border border-slate-200 bg-slate-50">
-                <summary class="cursor-pointer px-4 py-3 text-sm font-semibold">Bulgu ayrıntıları</summary>
-                <dl class="grid gap-4 px-4 pb-4 text-sm md:grid-cols-2">
+                <summary class="cursor-pointer px-4 py-3 text-sm font-semibold">Teknik ayrıntılar <span data-field="bug-id" class="ml-1 font-mono text-[11px] font-normal text-slate-500"></span></summary>
+                <p data-field="tech-title" class="px-4 text-xs text-slate-500"></p>
+                <dl class="grid gap-4 px-4 pb-4 pt-2 text-sm md:grid-cols-2">
                     <div><dt class="mb-1 font-bold text-emerald-800">Beklenen davranış</dt><dd data-field="expected" class="text-slate-600"></dd></div>
                     <div><dt class="mb-1 font-bold text-rose-800">Gerçekleşen davranış</dt><dd data-field="actual" class="break-words text-slate-600"></dd></div>
                     <div class="border-t border-slate-200 pt-2 md:col-span-2"><dt class="mb-1 font-bold text-slate-700">Kök neden analizi</dt><dd data-field="root-cause" class="text-slate-600"></dd></div>
@@ -288,11 +297,43 @@
             CRITICAL: 'bg-rose-700 text-white', HIGH: 'bg-rose-100 text-rose-800',
             MEDIUM: 'bg-amber-100 text-amber-900', LOW: 'bg-slate-100 text-slate-700',
         };
+        const SEVERITY_LABEL = {CRITICAL: 'KRİTİK', HIGH: 'YÜKSEK', MEDIUM: 'ORTA', LOW: 'DÜŞÜK'};
+        const SEVERITY_TONE = {
+            CRITICAL: {title: 'text-rose-700', border: 'border-rose-600'},
+            HIGH: {title: 'text-rose-700', border: 'border-rose-400'},
+            MEDIUM: {title: 'text-amber-800', border: 'border-amber-400'},
+            LOW: {title: 'text-slate-700', border: 'border-slate-300'},
+        };
+        const RISK_GROUPS = [
+            {levels: ['CRITICAL', 'HIGH'], title: 'Yüksek riskli bulgular', open: true,
+             hint: 'Önce bunları düzeltin.', header: 'bg-rose-50 text-rose-800 border-rose-200'},
+            {levels: ['MEDIUM'], title: 'Orta riskli bulgular', open: true,
+             hint: 'Planlı olarak ele alın.', header: 'bg-amber-50 text-amber-900 border-amber-200'},
+            {levels: ['LOW'], title: 'Düşük riskli ve bilgi amaçlı', open: false,
+             hint: 'İsteğe bağlı iyileştirmeler ve muhtemel yanlış alarmlar.', header: 'bg-slate-50 text-slate-700 border-slate-200'},
+        ];
         const STATUS_TEXT = {
             PENDING: 'Onay bekliyor', APPROVED: 'Onaylandı', APPLIED: 'Uygulandı',
             REJECTED: 'Reddedildi', ROLLED_BACK: 'Geri alındı',
         };
         let currentRun = null;
+
+        function renderFindingGroups(container, findings) {
+            for (const group of RISK_GROUPS) {
+                const items = findings.filter(f => group.levels.includes(f.evidence.severity));
+                if (!items.length) continue;
+                const wrapper = el('details', 'group');
+                wrapper.open = group.open;
+                const summary = el('summary', `flex cursor-pointer flex-wrap items-baseline justify-between gap-2 border-y px-6 py-3 ${group.header}`);
+                summary.appendChild(el('span', 'text-sm font-bold', `${group.title} (${items.length})`));
+                summary.appendChild(el('span', 'text-xs', group.hint));
+                wrapper.appendChild(summary);
+                const list = el('div', 'divide-y divide-slate-200');
+                for (const finding of items) list.appendChild(renderFinding(finding));
+                wrapper.appendChild(list);
+                container.appendChild(wrapper);
+            }
+        }
 
         // ---------- API helper (sends the optional dashboard token) ----------
         async function api(path, options = {}) {
@@ -443,8 +484,9 @@
             $('metric-passed').textContent = data.summary.passed_tests;
             $('metric-failed').textContent = data.summary.failed_tests;
             $('metric-proposals').textContent = data.summary.fixable_findings;
-            $('metric-severity').textContent = Object.entries(data.summary.by_severity)
-                .map(([sev, n]) => `${sev}: ${n}`).join(' · ');
+            $('metric-severity').textContent = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
+                .filter(sev => data.summary.by_severity[sev])
+                .map(sev => `${SEVERITY_LABEL[sev]}: ${data.summary.by_severity[sev]}`).join(' · ');
             $('queue-badge').textContent = `${data.findings.length} bulgu`;
 
             const links = $('report-links');
@@ -463,7 +505,7 @@
                 container.appendChild(el('p', 'p-8 text-center font-semibold text-slate-700',
                     'Seçilen kriterlere göre hiçbir hata tespit edilmedi.'));
             }
-            for (const finding of data.findings) container.appendChild(renderFinding(finding));
+            renderFindingGroups(container, data.findings);
             renderTable();
             $('results-section').scrollIntoView({behavior: 'smooth', block: 'start'});
         }
@@ -515,11 +557,28 @@
             const ev = finding.evidence;
             const proposal = finding.proposal;
 
-            field('severity').textContent = ev.severity;
+            const advice = finding.remediation;
+            const tone = SEVERITY_TONE[ev.severity];
+            node.classList.add(tone.border);
+            field('severity').textContent = SEVERITY_LABEL[ev.severity];
             field('severity').classList.add(...SEVERITY_CLASS[ev.severity].split(' '));
             field('criterion').textContent = ev.criterion;
             field('bug-id').textContent = ev.bug_id;
-            field('title').textContent = ev.title;
+            field('title').textContent = advice ? advice.headline : ev.title;
+            field('title').classList.add(tone.title);
+            field('tech-title').textContent = ev.title;
+            section('advice').hidden = !advice;
+            if (advice) {
+                field('priority').textContent = advice.priority;
+                field('priority').classList.add(tone.title);
+                field('ignorable').hidden = advice.noteworthy;
+                field('action').textContent = advice.action;
+                for (const step of advice.steps) field('steps').appendChild(el('li', '', step));
+                field('example').hidden = !advice.example;
+                field('example').textContent = advice.example || '';
+                field('note').hidden = !advice.note;
+                field('note').textContent = advice.note ? `Not: ${advice.note}` : '';
+            }
             field('request').textContent = `${ev.method} ${ev.target_url}`;
             field('expected').textContent = ev.expected_behavior;
             field('actual').textContent = ev.actual_behavior;
