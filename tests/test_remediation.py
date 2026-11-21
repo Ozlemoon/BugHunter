@@ -97,3 +97,54 @@ def test_slow_response_close_to_the_threshold_is_not_alarming():
     far_advice = advise(test, far, BugAnalyzer().analyze_failure(test, far))
     assert near_advice.noteworthy is False and "ağ gecikmesi" in near_advice.note
     assert far_advice.noteworthy is True and far_advice.severity == Severity.MEDIUM
+
+
+def test_findings_name_their_error_source_and_location(api_copy, tmp_path):
+    from core.remediation import ErrorSource
+
+    run = run_for(api_copy, tmp_path, HuntConfig(target_url=f"{API_BASE}/openapi.json",
+                                                   auth_header=AUTH["Authorization"]))
+    findings = by_test(run)
+    crash = findings["TC-API-BOUND-NONEXIST-user_id-GET-users-user_id-profile"].remediation
+    assert crash.source == ErrorSource.SERVER_CRASH
+    assert crash.source_side.startswith("Sunucu tarafı")
+    assert crash.location.startswith("GET /users/{user_id}/profile işleyicisi")
+
+    negative = findings["TC-API-BOUND-NEG-POST-orders"].remediation
+    assert negative.source == ErrorSource.INPUT_VALIDATION
+    assert "negatif kabul edilen alanlar: quantity" in negative.location
+
+    assert findings["TC-API-SEC-NOAUTH-DELETE-products-product_id"].remediation.source == ErrorSource.AUTH
+
+
+def test_run_recommendations_group_findings_by_source(api_copy, tmp_path):
+    run = run_for(api_copy, tmp_path, HuntConfig(target_url=f"{API_BASE}/openapi.json",
+                                                   auth_header=AUTH["Authorization"]))
+    recs = run.recommendations
+    assert recs, "a failing run must produce run-level advice"
+    assert sum(r.count for r in recs) == len(run.findings)
+    assert len({r.source for r in recs}) == len(recs)
+    noteworthy = [r for r in recs if r.noteworthy]
+    assert recs[:len(noteworthy)] == noteworthy, "real problems come before 'probably nothing' groups"
+    assert recs[0].severity == Severity.CRITICAL and recs[0].advice and recs[0].locations
+
+
+def test_web_findings_point_to_page_output_and_headers(web_copy, tmp_path):
+    from core.remediation import ErrorSource
+
+    run = run_for(web_copy, tmp_path, HuntConfig(target_url=f"{WEB_BASE}/", target_type=TargetType.WEB))
+    sources = {f.remediation.source: f.remediation for f in run.findings}
+    assert "yansıyan parametre: q" in sources[ErrorSource.OUTPUT_ENCODING].location
+    assert "yanıt başlıkları" in sources[ErrorSource.SERVER_CONFIG].location
+
+
+def test_unreachable_request_is_blamed_on_the_network():
+    from core.remediation import ErrorSource
+
+    test = TestCase(id="t", target_type=TargetType.API, criterion=TestCriterion.FUNCTIONAL, title="t",
+                    description="d", url="https://api.ornek.test/items")
+    result = TestResult(test_id="t", passed=False, error_message="DNS çözümlenemedi")
+    evidence = BugAnalyzer().analyze_failure(test, result)
+    remediation = advise(test, result, evidence)
+    assert remediation.source == ErrorSource.NETWORK and not remediation.noteworthy
+    assert remediation.location.startswith("api.ornek.test")

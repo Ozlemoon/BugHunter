@@ -34,7 +34,7 @@ from core.models import (
     TestResult,
 )
 from core.patcher import CodePatcher, HumanApprovalGate
-from core.remediation import Remediation, advise
+from core.remediation import Recommendation, Remediation, advise, recommend
 from core.runner import TestRunner
 from core.storage import RunStore
 from core.targets.api_target import ApiTargetParser
@@ -151,6 +151,7 @@ class HuntRun(BaseModel):
     results: List[TestResult] = Field(default_factory=list)
     findings: List[Finding] = Field(default_factory=list)
     summary: RunSummary = Field(default_factory=RunSummary)
+    recommendations: List[Recommendation] = Field(default_factory=list)
 
     def test(self, test_id: str) -> Optional[TestCase]:
         return next((t for t in self.tests if t.id == test_id), None)
@@ -296,6 +297,7 @@ class HuntSession:
             # Highest risk first; inside a level, real problems before "probably nothing" notes.
             run.findings.sort(key=lambda f: (-f.evidence.severity.rank,
                                              not (f.remediation.noteworthy if f.remediation else True)))
+            run.recommendations = recommend(f.remediation for f in run.findings if f.remediation)
 
             run.finished_at = datetime.now(timezone.utc)
             run.summary = summarize(run)
