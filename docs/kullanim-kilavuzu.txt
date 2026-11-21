@@ -1,0 +1,31 @@
+BugHunter AI Kullanım Kılavuzu
+
+Hangi hedefler test edilebilir?
+BugHunter AI iki tür hedefi test eder: REST API'ler ve web siteleri. REST API test etmek için OpenAPI veya Swagger belgesinin adresi verilir, örneğin https://petstore3.swagger.io/api/v3/openapi.json. Web sitesi test etmek için başlangıç sayfasının adresi verilir, örneğin https://quotes.toscrape.com/. Adresin başına https:// yazılmazsa BugHunter bunu otomatik olarak ekler.
+
+Test kriterleri nelerdir?
+İşlevsellik (FUNCTIONAL) kriteri beklenen yanıtı, belgelenmiş yanıt şemasını ve geçerli form gönderimini kontrol eder. Sınır değerleri (BOUNDARY) kriteri negatif sayıları, eksik zorunlu alanları, yanlış tipte verileri ve var olmayan kayıtları dener. Güvenlik (SECURITY) kriteri kimlik bilgisi olmadan veya geçersiz token ile yapılan silme isteklerini, yansıyan XSS açıklarını ve eksik güvenlik başlıklarını kontrol eder. Yanıt süresi (PERFORMANCE) kriteri yalnızca okuma isteklerinin süresini SLA eşiğiyle karşılaştırır. Web doğrulama (WEB_VALIDATION) kriteri kırık bağlantıları ve eksik görsel, script gibi varlıkları bulur.
+
+Uzak sitelerde yanıt süresi eşiği ne olmalı?
+Varsayılan yanıt süresi eşiği 500 milisaniyedir. İnternet üzerindeki uzak siteler yerel sunuculardan daha yavaş yanıt verdiği için uzak bir site test edilirken eşiğin 2000 ile 3000 milisaniye arasında seçilmesi önerilir.
+
+Güvenlik testleri ne zaman kapatılmalı?
+Güvenlik kriteri silme (DELETE) gibi yıkıcı istekler gönderebilir. Başkalarına ait veya herkesin ortak kullandığı demo sunucularda güvenlik kriteri kapatılmalıdır. Güvenlik testleri yalnızca sahibi olduğunuz veya test izniniz bulunan sistemlerde çalıştırılmalıdır.
+
+Kimlik doğrulama nasıl yapılır?
+Korumalı bir API test edilirken Authorization başlığı alanına örneğin "Bearer token-degeri" yazılır. Bu değer işlevsel testlerde gönderilir, güvenlik testleri ise bilerek göndermez. Token değeri raporlara, çalışma geçmişine ve kanıt scriptlerine asla yazılmaz.
+
+Bulunan hatalar nasıl raporlanır?
+Her hata için önem derecesi (CRITICAL, HIGH, MEDIUM, LOW), beklenen davranış, gerçekleşen davranış ve kök neden tahmini gösterilir. Ayrıca her hata için tek başına çalıştırılabilen bir kanıt scripti (reproduce_bug.py) üretilir; script hata hâlâ varsa 1, düzeldiyse 0 çıkış koduyla biter. Sonuçlar HTML, JUnit XML ve JSON rapor olarak indirilebilir.
+
+Sunucu hata kodu döndürünce önem derecesi nedir?
+Hedef sunucu 500 ile 599 arasında bir HTTP durum kodu döndürürse hata CRITICAL olarak işaretlenir. Kimlik doğrulama olmadan yapılan yıkıcı işlemler de CRITICAL sayılır. Sınır değeri hataları HIGH, yanıt süresi aşımları MEDIUM, eksik güvenlik başlıkları LOW önem derecesindedir.
+
+Düzeltmeler nasıl uygulanır?
+BugHunter kaynak koda hiçbir zaman onay almadan dokunmaz. Bir düzeltme önerisi onaylandığında önce dosyanın .bughunter.bak uzantılı bir yedeği alınır, ardından yama uygulanır ve tüm testler yeniden çalıştırılır. Yama hatayı çözmezse veya daha önce geçen bir testi bozarsa yama otomatik olarak geri alınır.
+
+CI hattında nasıl kullanılır?
+Sürekli entegrasyon için "python main.py scan" komutu kullanılır. Bu komut soru sormaz ve koda dokunmaz. --fail-on HIGH seçeneğiyle HIGH veya daha ciddi bir hata bulunduğunda çıkış kodu 1 olur, hedefe ulaşılamazsa çıkış kodu 2 olur. --junit seçeneği JUnit XML raporu üretir.
+
+Panel "Not Found" hatası verirse ne yapılmalı?
+Panel sayfası açık ama arkadaki sunucu eski bir sürümle çalışıyorsa "Panel sunucusu güncel değil" uyarısı görünür. Bu durumda paneli çalıştıran terminalde Ctrl+C ile sunucu durdurulur ve proje klasöründe ".venv\Scripts\python main.py web" komutuyla yeniden başlatılır, ardından sayfa yenilenir.
