@@ -189,3 +189,7 @@ def test_html_report_groups_findings_by_risk_with_advice(web_copy, tmp_path):
     assert high < low
     assert "Çözüm önerisi" in html and "Yansıyan XSS açığı" in html
     assert html.index("Yansıyan XSS açığı") < low  # high-risk advice sits above the low-risk group
+    advice = html.index("Tavsiyeler ve hata kaynakları")
+    assert advice < high, "run-level advice opens the report"
+    assert "Hatanın kaynağı" in html and "Çıktı kaçışlama (XSS)" in html
+    assert "yansıyan parametre: q" in html

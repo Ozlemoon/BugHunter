@@ -57,6 +57,14 @@
   .advice { border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; margin: 10px 0; }
   .advice ol { margin: 6px 0; padding-left: 20px; }
   .note { color: var(--muted); font-size: 12px; }
+  .source { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; font-size: 12px;
+            background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; margin: 0 0 8px; }
+  .source dt { font-weight: 600; } .source dd code { overflow-wrap: anywhere; }
+  .rec { border-left: 4px solid var(--line); }
+  .rec.risk-high { border-left-color: var(--high); } .rec.risk-medium { border-left-color: var(--medium); }
+  .rec h4 { margin: 0 0 4px; font-size: 15px; } .rec.risk-high h4 { color: var(--high); }
+  .rec.risk-medium h4 { color: var(--medium); }
+  .rec ul { margin: 6px 0 0; padding-left: 18px; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -74,6 +82,20 @@
     <div class="tile"><span class="muted">Başarısız</span><b>{{ run.summary.failed_tests }}</b></div>
     <div class="tile"><span class="muted">Otomatik düzeltilebilir</span><b>{{ run.summary.fixable_findings }}</b></div>
   </div>
+
+  {% set rec_css = {"CRITICAL": "risk-high", "HIGH": "risk-high", "MEDIUM": "risk-medium", "LOW": "risk-low"} %}
+  {% if run.recommendations %}
+  <h2>Tavsiyeler ve hata kaynakları</h2>
+  <p class="muted">Hatalar nereden kaynaklanıyor ve önce neyi düzeltmelisiniz? En acil olan en üstte.</p>
+  {% for rec in run.recommendations %}
+  <section class="card rec {{ rec_css[rec.severity.value] if rec.noteworthy else 'risk-low' }}">
+    <h4>{{ loop.index }}. {{ rec.label }}</h4>
+    <p class="muted">{{ rec.side }} · {{ rec.count }} bulgu{% if not rec.noteworthy %} · muhtemelen uygulama hatası değil{% endif %}</p>
+    <p>{{ rec.advice }}</p>
+    {% if rec.locations %}<ul>{% for loc in rec.locations %}<li><code>{{ loc }}</code></li>{% endfor %}</ul>{% endif %}
+  </section>
+  {% endfor %}
+  {% endif %}
 
   <h2>Bulgular ({{ run.findings|length }})</h2>
   {% set groups = [
@@ -95,6 +117,12 @@
     <h4 class="title">{{ r.headline if r else f.evidence.title }}</h4>
     {% if r %}
     <div class="advice">
+      {% if r.source_label %}
+      <dl class="source">
+        <dt>Hatanın kaynağı</dt><dd><strong>{{ r.source_label }}</strong> · {{ r.source_side }}</dd>
+        <dt>Nerede</dt><dd><code>{{ r.location }}</code></dd>
+      </dl>
+      {% endif %}
       <strong>Çözüm önerisi</strong>
       <p>{{ r.action }}</p>
       <ol>{% for step in r.steps %}<li>{{ step }}</li>{% endfor %}</ol>

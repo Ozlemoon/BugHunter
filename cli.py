@@ -129,6 +129,9 @@ def print_finding(index: int, finding) -> None:
         quiet = "" if r.noteworthy else " · [dim]muhtemelen dikkate değer değil[/dim]"
         console.print(f"  [{title_style}]{escape(r.priority)}[/]{quiet}")
     console.print(f"  [dim]{escape(f'{e.method} {e.target_url}')}[/dim]")
+    if r and r.source_label:
+        console.print(f"  [bold]Hatanın kaynağı:[/bold] {escape(r.source_label)} [dim]({escape(r.source_side)})[/dim]")
+        console.print(f"  [bold]Nerede:[/bold] {escape(r.location)}")
     if r:
         console.print(f"  [bold]Çözüm önerisi:[/bold] {escape(r.action)}")
         for number, step in enumerate(r.steps, 1):
@@ -137,6 +140,21 @@ def print_finding(index: int, finding) -> None:
             console.print(f"  [dim]Not: {escape(r.note)}[/dim]")
     else:
         console.print(f"  [bold]Kök neden:[/bold] {escape(e.root_cause_hypothesis)}")
+
+
+def print_recommendations(run) -> None:
+    """Run-level advice: where the defects come from, most urgent first."""
+    if not run.recommendations:
+        return
+    console.print("\n[bold]Tavsiyeler ve hata kaynakları[/bold]")
+    for number, rec in enumerate(run.recommendations, 1):
+        style = ({"CRITICAL": "bold red", "HIGH": "bold red", "MEDIUM": "bold yellow"}.get(rec.severity.value, "bold")
+                 if rec.noteworthy else "dim")
+        quiet = "" if rec.noteworthy else " · muhtemelen uygulama hatası değil"
+        console.print(f"[{style}]{number}. {escape(rec.label)}[/] [dim]({escape(rec.side)} · {rec.count} bulgu{quiet})[/dim]")
+        console.print(f"   {escape(rec.advice)}")
+        for location in rec.locations:
+            console.print(f"   [dim]→ {escape(location)}[/dim]")
 
 
 # ---------------------------------------------------------------------------
@@ -161,6 +179,7 @@ def cmd_hunt(args: argparse.Namespace) -> int:
     if not run.findings:
         console.print("[bold green]🎉 Hedef seçilen tüm kriterleri geçti.[/bold green]")
         return EXIT_OK
+    print_recommendations(run)
 
     for index, finding in enumerate(run.findings, 1):
         print_finding(index, finding)
@@ -207,6 +226,7 @@ def cmd_scan(args: argparse.Namespace) -> int:
                 console.print(f"[dim]{fmt.upper()} rapor → {path}[/dim]")
     if not args.quiet:
         print_results(run)
+        print_recommendations(run)
         for index, finding in enumerate(run.findings, 1):
             print_finding(index, finding)
 
