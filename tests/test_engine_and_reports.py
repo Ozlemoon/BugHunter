@@ -179,3 +179,13 @@ def test_connection_errors_are_explained():
 
 def test_host_and_port_without_scheme_is_accepted():
     assert HuntConfig(target_url="localhost:8002/").target_url == "https://localhost:8002/"
+
+
+def test_html_report_groups_findings_by_risk_with_advice(web_copy, tmp_path):
+    run = session_for(web_copy, tmp_path).start(
+        HuntConfig(target_url=f"{WEB_BASE}/", target_type=TargetType.WEB))
+    html = reporting.render(run, "html")
+    high, low = html.index("Yüksek riskli bulgular"), html.index("Düşük riskli ve bilgi amaçlı")
+    assert high < low
+    assert "Çözüm önerisi" in html and "Yansıyan XSS açığı" in html
+    assert html.index("Yansıyan XSS açığı") < low  # high-risk advice sits above the low-risk group

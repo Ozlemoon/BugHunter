@@ -42,6 +42,21 @@
   .pill { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px; }
   .pass { background: var(--pass-bg); color: var(--pass); } .fail { background: var(--fail-bg); color: var(--fail); }
   details summary { cursor: pointer; font-weight: 600; margin-top: 10px; }
+  h3.group { font-size: 15px; margin: 24px 0 10px; padding: 8px 12px; border-radius: 8px; }
+  h3.group span { font-weight: 400; font-size: 12px; margin-left: 8px; }
+  h3.risk-high { background: var(--fail-bg); color: var(--high); }
+  h3.risk-medium { color: var(--medium); border: 1px solid currentColor; }
+  h3.risk-low { color: var(--low); border: 1px solid var(--line); }
+  .card.risk-high { border-left: 4px solid var(--high); }
+  .card.risk-medium { border-left: 4px solid var(--medium); }
+  .card.risk-low { border-left: 4px solid var(--line); }
+  h4.title { font-size: 16px; margin: 8px 0 4px; }
+  .risk-high h4.title, .risk-high .priority { color: var(--high); }
+  .risk-medium h4.title, .risk-medium .priority { color: var(--medium); }
+  .priority { font-size: 12px; font-weight: 600; margin-left: 6px; }
+  .advice { border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; margin: 10px 0; }
+  .advice ol { margin: 6px 0; padding-left: 20px; }
+  .note { color: var(--muted); font-size: 12px; }
 </style>
 </head>
 <body>
@@ -61,10 +76,32 @@
   </div>
 
   <h2>Bulgular ({{ run.findings|length }})</h2>
-  {% for f in run.findings %}
-  <section class="card">
-    <span class="sev sev-{{ f.evidence.severity.value }}">{{ f.evidence.severity.value }}</span>
-    <strong>{{ f.evidence.title }}</strong>
+  {% set groups = [
+       (["CRITICAL", "HIGH"], "Yüksek riskli bulgular", "Önce bunları düzeltin.", "risk-high"),
+       (["MEDIUM"], "Orta riskli bulgular", "Planlı olarak ele alın.", "risk-medium"),
+       (["LOW"], "Düşük riskli ve bilgi amaçlı", "İsteğe bağlı iyileştirmeler ve muhtemel yanlış alarmlar.", "risk-low"),
+     ] %}
+  {% set labels = {"CRITICAL": "KRİTİK", "HIGH": "YÜKSEK", "MEDIUM": "ORTA", "LOW": "DÜŞÜK"} %}
+  {% for levels, group_title, hint, css in groups %}
+  {% set items = run.findings | selectattr("evidence.severity.value", "in", levels) | list %}
+  {% if items %}
+  <h3 class="group {{ css }}">{{ group_title }} ({{ items|length }}) <span>{{ hint }}</span></h3>
+  {% for f in items %}
+  {% set r = f.remediation %}
+  <section class="card {{ css }}">
+    <span class="sev sev-{{ f.evidence.severity.value }}">{{ labels[f.evidence.severity.value] }}</span>
+    {% if r %}<span class="priority">{{ r.priority }}</span>{% endif %}
+    {% if r and not r.noteworthy %}<span class="muted"> · Muhtemelen dikkate değer değil</span>{% endif %}
+    <h4 class="title">{{ r.headline if r else f.evidence.title }}</h4>
+    {% if r %}
+    <div class="advice">
+      <strong>Çözüm önerisi</strong>
+      <p>{{ r.action }}</p>
+      <ol>{% for step in r.steps %}<li>{{ step }}</li>{% endfor %}</ol>
+      {% if r.example %}<pre>{{ r.example }}</pre>{% endif %}
+      {% if r.note %}<p class="note">Not: {{ r.note }}</p>{% endif %}
+    </div>
+    {% endif %}
     <dl>
       <dt>İstek</dt><dd><code>{{ f.evidence.method }} {{ f.evidence.target_url }}</code></dd>
       <dt>Beklenen</dt><dd>{{ f.evidence.expected_behavior }}</dd>
@@ -78,9 +115,10 @@
     {% endif %}
     <details><summary>Bağımsız kanıt scripti</summary><pre>{{ f.evidence.reproduction_code }}</pre></details>
   </section>
-  {% else %}
-  <p class="card">Seçilen kriterlere göre hata bulunmadı.</p>
   {% endfor %}
+  {% endif %}
+  {% endfor %}
+  {% if not run.findings %}<p class="card">Seçilen kriterlere göre hata bulunmadı.</p>{% endif %}
 
   <h2>Tüm testler</h2>
   <div class="table-wrap">

@@ -16,6 +16,7 @@ from typing import Optional
 
 import httpx
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, TextColumn
 from rich.prompt import Confirm
@@ -33,6 +34,7 @@ from core.targets.api_target import SpecError
 console = Console()
 
 EXIT_OK, EXIT_FINDINGS, EXIT_ERROR = 0, 1, 2
+SEVERITY_LABEL = {"CRITICAL": "KRİTİK", "HIGH": "YÜKSEK", "MEDIUM": "ORTA", "LOW": "DÜŞÜK"}
 SEVERITY_STYLE = {"CRITICAL": "bold white on red", "HIGH": "bold red", "MEDIUM": "yellow", "LOW": "dim"}
 
 
@@ -118,11 +120,23 @@ def print_results(run: HuntRun) -> None:
 
 
 def print_finding(index: int, finding) -> None:
-    e = finding.evidence
-    console.print(f"\n[{SEVERITY_STYLE[e.severity.value]}] {e.severity.value} [/] [bold]#{index} {e.title}[/bold]")
-    console.print(f"  [dim]{e.method} {e.target_url}[/dim]")
-    console.print(f"  [bold]Kök neden:[/bold] {e.root_cause_hypothesis}")
-    console.print(f"  [bold]Gerçekleşen:[/bold] {e.actual_behavior[:300]}")
+    e, r = finding.evidence, finding.remediation
+    sev = e.severity.value
+    title_style = {"CRITICAL": "bold red", "HIGH": "bold red", "MEDIUM": "bold yellow"}.get(sev, "bold")
+    headline = r.headline if r else e.title
+    console.print(f"\n[{SEVERITY_STYLE[sev]}] {SEVERITY_LABEL[sev]} [/] [{title_style}]#{index} {escape(headline)}[/]")
+    if r:
+        quiet = "" if r.noteworthy else " · [dim]muhtemelen dikkate değer değil[/dim]"
+        console.print(f"  [{title_style}]{escape(r.priority)}[/]{quiet}")
+    console.print(f"  [dim]{escape(f'{e.method} {e.target_url}')}[/dim]")
+    if r:
+        console.print(f"  [bold]Çözüm önerisi:[/bold] {escape(r.action)}")
+        for number, step in enumerate(r.steps, 1):
+            console.print(f"    {number}. {escape(step)}")
+        if r.note:
+            console.print(f"  [dim]Not: {escape(r.note)}[/dim]")
+    else:
+        console.print(f"  [bold]Kök neden:[/bold] {escape(e.root_cause_hypothesis)}")
 
 
 # ---------------------------------------------------------------------------
