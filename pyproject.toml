@@ -39,7 +39,7 @@ packages = ["core", "core.targets", "web", "playground"]
 [tool.setuptools.package-data]
 web = ["templates/*.html"]
 playground = ["templates/*.html"]
-core = ["templates/*.html"]
+core = ["templates/*.html", "templates/*.txt", "templates/assets/*.png"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

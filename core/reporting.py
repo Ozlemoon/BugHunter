@@ -20,6 +20,11 @@ if TYPE_CHECKING:
 TEMPLATES = Path(__file__).resolve().parent / "templates"
 _env = Environment(loader=FileSystemLoader(str(TEMPLATES)), autoescape=select_autoescape(["html"]))
 
+def environment() -> Environment:
+    """The Jinja environment for core/templates (reports and e-mails)."""
+    return _env
+
+
 FORMATS = {
     "json": ("application/json", "json"),
     "junit": ("application/xml", "xml"),

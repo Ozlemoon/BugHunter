@@ -34,6 +34,13 @@ CREATE TABLE IF NOT EXISTS runs (
     data           TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS report_shares (
+    token_hash TEXT PRIMARY KEY,
+    run_id     TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS runs_by_owner ON runs(owner_id, started_at DESC);
 """
 

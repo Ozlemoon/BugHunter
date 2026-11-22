@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BugHunter test raporu · {{ name }}</title>
+</head>
+<body style="margin:0;padding:0;background:#eef2f7;font-family:'IBM Plex Sans','Segoe UI',Arial,sans-serif;color:#0f172a;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f7;padding:24px 12px;">
+  <tr><td align="center">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #dbe2ec;">
+      <tr>
+        <td style="background:#0b1730;padding:20px 28px;">
+          <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+            <td style="width:36px;height:36px;"><img src="{{ logo_src }}" width="36" height="36" alt="BugHunter" style="display:block;border:0;border-radius:9px;"></td>
+            <td style="padding-left:12px;color:#ffffff;font-size:18px;font-weight:600;">BugHunter <span style="color:#93c5fd;font-weight:400;">AI</span></td>
+          </tr></table>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:28px 28px 8px;">
+          <p style="margin:0;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#2563eb;font-weight:700;">Test raporu</p>
+          <p style="margin:6px 0 0;font-size:13px;color:#475569;">Test edilen sistem</p>
+          <h1 style="margin:2px 0 0;font-size:24px;line-height:1.25;color:#0f172a;word-break:break-all;">{{ name }}</h1>
+          <p style="margin:6px 0 0;font-size:12px;color:#64748b;word-break:break-all;">{{ run.config.target_type.value }} · {{ run.config.target_url }}<br>{{ run.started_at.strftime("%d.%m.%Y %H:%M") }} UTC</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:16px 28px 4px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td width="33%" style="padding:4px;">
+                <div style="border:1px solid #dbe2ec;border-radius:10px;padding:14px;text-align:center;">
+                  <div style="font-size:12px;color:#475569;">Toplam test</div>
+                  <div style="font-size:28px;font-weight:700;color:#0f172a;">{{ summary.total_tests }}</div>
+                </div>
+              </td>
+              <td width="33%" style="padding:4px;">
+                <div style="border:1px solid #bfdbfe;background:#eff6ff;border-radius:10px;padding:14px;text-align:center;">
+                  <div style="font-size:12px;color:#1d4ed8;">Başarılı</div>
+                  <div style="font-size:28px;font-weight:700;color:#1d4ed8;">{{ summary.passed_tests }}</div>
+                </div>
+              </td>
+              <td width="33%" style="padding:4px;">
+                <div style="border:1px solid #fecaca;background:#fef2f2;border-radius:10px;padding:14px;text-align:center;">
+                  <div style="font-size:12px;color:#b91c1c;">Başarısız</div>
+                  <div style="font-size:28px;font-weight:700;color:#b91c1c;">{{ summary.failed_tests }}</div>
+                </div>
+              </td>
+            </tr>
+          </table>
+          {% if worst %}
+          <p style="margin:12px 4px 0;font-size:13px;color:#475569;">En yüksek önem derecesi: <strong style="color:{{ '#b91c1c' if worst in ('CRITICAL', 'HIGH') else '#b45309' if worst == 'MEDIUM' else '#475569' }};">{{ worst }}</strong></p>
+          {% endif %}
+        </td>
+      </tr>
+      {% if note %}
+      <tr>
+        <td style="padding:16px 28px 0;">
+          <div style="border-left:3px solid #2563eb;background:#f8fafc;padding:10px 14px;font-size:14px;color:#334155;white-space:pre-line;">{{ note }}</div>
+        </td>
+      </tr>
+      {% endif %}
+      <tr>
+        <td align="center" style="padding:28px 28px 8px;">
+          <a href="{{ report_url }}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:13px 28px;border-radius:9px;">Raporu görüntüle</a>
+          <p style="margin:12px 0 0;font-size:12px;color:#64748b;">Bağlantı açılmazsa ekteki <strong>bughunter-{{ run.run_id }}.html</strong> dosyasını açın.</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:20px 28px 24px;border-top:1px solid #eef2f7;font-size:12px;color:#94a3b8;">
+          Bu rapor BugHunter AI üzerinden <strong style="color:#64748b;">{{ sent_by }}</strong> tarafından gönderildi.
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>

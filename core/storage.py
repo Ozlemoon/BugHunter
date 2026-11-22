@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
+import secrets
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional
 
@@ -15,6 +18,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 RUN_ID_PATTERN = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{6}$")
+
+
+def _hash(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
 class RunStore:
@@ -95,6 +102,25 @@ class RunStore:
         """Gives every run without an owner to `owner_id`; returns how many."""
         with self.db.connect() as db:
             return db.execute("UPDATE runs SET owner_id = ? WHERE owner_id IS NULL", (owner_id,)).rowcount
+
+    # -- read-only links for e-mailed reports ------------------------------
+    def create_share(self, run_id: str, days: int = 30) -> str:
+        """A random link token that opens this run's HTML report without logging in."""
+        token = secrets.token_urlsafe(24)
+        now = datetime.now(timezone.utc)
+        with self.db.connect() as db:
+            db.execute("DELETE FROM report_shares WHERE expires_at < ?", (now.isoformat(),))
+            db.execute("INSERT INTO report_shares (token_hash, run_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
+                       (_hash(token), run_id, now.isoformat(), (now + timedelta(days=days)).isoformat()))
+        return token
+
+    def load_shared(self, token: str) -> Optional[HuntRun]:
+        if not token or len(token) > 100:
+            return None
+        with self.db.connect() as db:
+            row = db.execute("SELECT run_id FROM report_shares WHERE token_hash = ? AND expires_at > ?",
+                             (_hash(token), datetime.now(timezone.utc).isoformat())).fetchone()
+        return self.load(row["run_id"]) if row else None
 
     # ------------------------------------------------------------------
     def _import_legacy(self, directory: Path) -> None:

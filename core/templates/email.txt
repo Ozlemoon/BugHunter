@@ -1,0 +1,18 @@
+BugHunter test raporu
+
+Test edilen sistem: {{ name }}
+Adres: {{ run.config.target_url }} ({{ run.config.target_type.value }})
+Tarih: {{ run.started_at.strftime("%d.%m.%Y %H:%M") }} UTC
+
+Toplam test: {{ summary.total_tests }}
+Başarılı:    {{ summary.passed_tests }}
+Başarısız:   {{ summary.failed_tests }}
+{% if worst %}En yüksek önem derecesi: {{ worst }}
+{% endif %}{% if note %}
+Not:
+{{ note }}
+{% endif %}
+Raporu görüntüle: {{ report_url }}
+Bağlantı açılmazsa ekteki bughunter-{{ run.run_id }}.html dosyasını açın.
+
+Bu rapor BugHunter AI üzerinden {{ sent_by }} tarafından gönderildi.

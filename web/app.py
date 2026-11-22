@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import hmac
 import logging
+import threading
+import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Union
 from urllib.parse import urlsplit
 
 import httpx
@@ -20,7 +22,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
-from core import reporting
+from core import mailer, reporting
 from core.auth import SESSION_LIFETIME, AuthError, User
 from core.config import get_settings
 from core.engine import (
@@ -370,6 +372,73 @@ def reject_fix(run_id: str, fix_id: str, user: User = Depends(require_user)):
 def rollback_fix(run_id: str, fix_id: str, user: User = Depends(require_user)):
     proposal = _fix_action(get_session().rollback, run_id, fix_id, user)
     return {"status": "rolled_back", "fix_id": fix_id, "proposal": proposal.model_dump(mode="json")}
+
+
+class EmailRequest(BaseModel):
+    recipients: Union[str, List[str]] = Field(description="Addresses, comma separated or as a list")
+    note: Optional[str] = Field(default=None, max_length=mailer.MAX_NOTE_LENGTH)
+
+
+MAIL_LIMIT = 10           # e-mails ...
+MAIL_WINDOW_SECONDS = 600  # ... per user per 10 minutes
+_mail_log: Dict[int, List[float]] = {}
+_mail_lock = threading.Lock()
+
+
+def _check_mail_rate(user: User) -> None:
+    with _mail_lock:
+        now = time.monotonic()
+        recent = [t for t in _mail_log.get(user.id, []) if now - t < MAIL_WINDOW_SECONDS]
+        if len(recent) >= MAIL_LIMIT:
+            raise HTTPException(status_code=429, detail="Kısa sürede çok fazla e-posta gönderildi. Birkaç dakika sonra tekrar deneyin.")
+        recent.append(now)
+        _mail_log[user.id] = recent
+
+
+@app.get("/api/mail/status")
+def mail_status(user: User = Depends(require_user)):
+    settings = get_settings()
+    return {"configured": settings.mail_configured, "sender": settings.smtp_from or None,
+            "report_base_url": settings.base_url, "max_recipients": mailer.MAX_RECIPIENTS}
+
+
+@app.post("/api/runs/{run_id}/email")
+def email_report(run_id: str, payload: EmailRequest, user: User = Depends(require_user)):
+    """E-mail the run's summary with a "Raporu görüntüle" link and the HTML report attached."""
+    run = _load(run_id, user)
+    settings = get_settings()
+    try:
+        recipients = mailer.parse_recipients(payload.recipients)
+    except mailer.MailError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    if not settings.mail_configured:
+        raise HTTPException(status_code=503, detail=mailer.NOT_CONFIGURED)
+    _check_mail_rate(user)
+    store = get_session().store
+    token = store.create_share(run.run_id, days=settings.share_link_days)
+    report_url = f"{settings.base_url}/r/{token}"
+    message = mailer.build_message(run, recipients, settings.smtp_from, report_url,
+                                   sent_by=user.username, note=payload.note)
+    try:
+        mailer.send(message, settings)
+    except mailer.MailError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    logger.info("User %s e-mailed run %s to %d recipient(s)", user.username, run.run_id, len(recipients))
+    return {"status": "sent", "recipients": recipients, "report_url": report_url}
+
+
+@app.get("/r/{token}", response_class=HTMLResponse, include_in_schema=False)
+def shared_report(token: str):
+    """Read-only HTML report behind the e-mailed "Raporu görüntüle" button (no login needed)."""
+    run = get_session().store.load_shared(token)
+    if run is None:
+        return HTMLResponse(status_code=404, headers={"X-Robots-Tag": "noindex"}, content=(
+            "<!doctype html><meta charset='utf-8'><title>Rapor bulunamadı</title>"
+            "<body style='font-family:system-ui,sans-serif;max-width:560px;margin:15vh auto;padding:0 16px;color:#0f172a'>"
+            "<h1 style='font-size:20px'>Rapor bulunamadı</h1>"
+            "<p style='color:#475569'>Bu bağlantının süresi dolmuş ya da bağlantı hatalı. "
+            "Raporu gönderen kişiden yeni bir bağlantı isteyin veya e-postanın ekindeki HTML dosyasını açın.</p></body>"))
+    return HTMLResponse(reporting.render(run, "html"), headers={"X-Robots-Tag": "noindex", "Referrer-Policy": "no-referrer"})
 
 
 class RagQuestion(BaseModel):

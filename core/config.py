@@ -73,6 +73,17 @@ class Settings:
 
     # When set, every /api/* request must send this value in the X-BugHunter-Token header.
     api_token: str = ""
+    # E-mailing reports. Nothing is sent until smtp_host and smtp_from are set.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    smtp_security: str = "starttls"  # starttls | ssl | none
+    # Address recipients use for the "Raporu görüntüle" button; defaults to http://host:port.
+    public_url: str = ""
+    share_link_days: int = 30
+
     # Whether the login screen offers "Hesap oluştur". The very first account can always be created.
     allow_signup: bool = True
 
@@ -99,12 +110,29 @@ class Settings:
             patch_roots=tuple(_resolve(p) for p in roots.split(os.pathsep) if p) or (PROJECT_ROOT,),
             reports_dir=_resolve(_env("REPORTS_DIR", "reports")),
             api_token=_env("API_TOKEN", ""),
+            smtp_host=_env("SMTP_HOST", ""),
+            smtp_port=_env_int("SMTP_PORT", cls.smtp_port),
+            smtp_user=_env("SMTP_USER", ""),
+            smtp_password=_env("SMTP_PASSWORD", ""),
+            smtp_from=_env("SMTP_FROM", ""),
+            smtp_security=_env("SMTP_SECURITY", cls.smtp_security).strip().lower(),
+            public_url=_env("PUBLIC_URL", "").rstrip("/"),
+            share_link_days=_env_int("SHARE_LINK_DAYS", cls.share_link_days),
             allow_signup=_env("ALLOW_SIGNUP", "true").strip().lower() not in ("0", "false", "no", "off"),
             ollama_url=_env("OLLAMA_URL", cls.ollama_url).rstrip("/"),
             rag_db=_resolve(_env("RAG_DB", "run_artifacts/rag")),
             rag_chat_model=_env("RAG_CHAT_MODEL", cls.rag_chat_model),
             rag_embed_model=_env("RAG_EMBED_MODEL", cls.rag_embed_model),
         )
+
+    @property
+    def mail_configured(self) -> bool:
+        return bool(self.smtp_host and self.smtp_from)
+
+    @property
+    def base_url(self) -> str:
+        """Where people reach this dashboard (used in e-mailed links)."""
+        return self.public_url or f"http://{self.host}:{self.port}"
 
     @property
     def database_path(self) -> Path:
