@@ -25,10 +25,10 @@
         </a>
         <nav aria-label="Panel" class="flex gap-1 overflow-x-auto px-3 pb-3 text-sm font-medium lg:flex-col lg:overflow-visible lg:pb-0">
             <p class="hidden px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 lg:block">Menü</p>
-            <a href="#test-setup" class="nav-link flex shrink-0 items-center gap-3 rounded-lg px-3 py-2 text-slate-300 transition hover:bg-white/5 hover:text-white"><svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Testler</a>
-            <a href="#history-heading" class="nav-link flex shrink-0 items-center gap-3 rounded-lg px-3 py-2 text-slate-300 transition hover:bg-white/5 hover:text-white"><svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg>Önceki testlerim</a>
-            <a href="#test-guide" class="nav-link flex shrink-0 items-center gap-3 rounded-lg px-3 py-2 text-slate-300 transition hover:bg-white/5 hover:text-white"><svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5V5a2 2 0 0 1 2-2h14v16H6a2 2 0 0 0-2 2"/><path d="M8 7h8M8 11h6"/></svg>Rehber</a>
-            <a href="#rag-heading" class="nav-link flex shrink-0 items-center gap-3 rounded-lg px-3 py-2 text-slate-300 transition hover:bg-white/5 hover:text-white"><svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg>Proje belgeleri</a>
+            <a href="#testler" data-view-link="tests" class="nav-link flex shrink-0 items-center gap-3 rounded-lg px-3 py-2 text-slate-300 transition hover:bg-white/5 hover:text-white"><svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Testler</a>
+            <a href="#onceki-testlerim" data-view-link="history" class="nav-link flex shrink-0 items-center gap-3 rounded-lg px-3 py-2 text-slate-300 transition hover:bg-white/5 hover:text-white"><svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg>Önceki testlerim</a>
+            <a href="#rehber" data-view-link="guide" class="nav-link flex shrink-0 items-center gap-3 rounded-lg px-3 py-2 text-slate-300 transition hover:bg-white/5 hover:text-white"><svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5V5a2 2 0 0 1 2-2h14v16H6a2 2 0 0 0-2 2"/><path d="M8 7h8M8 11h6"/></svg>Rehber</a>
+            <a href="#belgeler" data-view-link="docs" class="nav-link flex shrink-0 items-center gap-3 rounded-lg px-3 py-2 text-slate-300 transition hover:bg-white/5 hover:text-white"><svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg>Proje belgeleri</a>
         </nav>
         <div class="flex items-center justify-between gap-3 border-t border-white/10 px-5 py-3 lg:mt-auto lg:py-4">
             <span class="flex min-w-0 items-center gap-2 text-sm">
@@ -52,6 +52,7 @@
             <span id="server-warning-text">Sunucu eski bir sürümle çalışıyor. Paneli çalıştırdığınız terminalde Ctrl+C ile durdurup
             <code>python main.py web</code> komutuyla yeniden başlatın, ardından sayfayı yenileyin.</span>
         </div>
+        <div data-view="tests" class="space-y-6">
         <form id="hunt-form" novalidate class="space-y-6">
             <section id="test-setup" aria-labelledby="setup-heading"
                      class="overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 text-white shadow-lg">
@@ -110,7 +111,7 @@
                 </ul>
             </section>
 
-            <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            <div>
                 <section aria-labelledby="options-heading" class="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
                     <div class="flex flex-wrap items-baseline justify-between gap-2">
                         <h2 id="options-heading" class="text-lg font-bold text-slate-950">Test yapılandırması</h2>
@@ -172,24 +173,6 @@
                     </details>
                 </section>
 
-                <aside id="test-guide" aria-labelledby="guide-heading" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6 lg:sticky lg:top-6">
-                    <h2 id="guide-heading" class="text-lg font-bold text-slate-950">Test rehberi</h2>
-                    <ol class="mt-4 list-decimal space-y-3 pl-5 text-sm leading-relaxed text-slate-700">
-                        <li><strong>Adresi gir.</strong> <span id="guide-target"></span></li>
-                        <li><strong>Kontrolleri seç.</strong> <span id="guide-criteria"></span></li>
-                        <li><strong>Bulguları incele.</strong> Beklenen ve gerçekleşen davranışı, kök nedeni ve bağımsız kanıt scriptini karşılaştır.</li>
-                        <li><strong>Düzeltmeyi onayla.</strong> Yama yalnızca senin onayınla uygulanır; ardından tüm testler yeniden koşar ve yan etki varsa otomatik geri alınır.</li>
-                    </ol>
-                    <details class="mt-5 border-t border-slate-100 pt-4 text-sm text-slate-600">
-                        <summary class="cursor-pointer font-semibold text-slate-800">Demo adreslerini nasıl kullanırım?</summary>
-                        <p class="mt-2">Proje klasöründe <code>python main.py playground</code> çalıştır (veya <code>python main.py demo</code>). Ardından demo düğmelerinden birini seç.</p>
-                    </details>
-                    <details class="mt-3 text-sm text-slate-600">
-                        <summary class="cursor-pointer font-semibold text-slate-800">CI hattında nasıl çalıştırırım?</summary>
-                        <pre class="mt-2 overflow-x-auto rounded bg-slate-100 p-2 text-[11px]">python main.py scan --url https://… \
-      --junit report.xml --fail-on HIGH</pre>
-                    </details>
-                </aside>
             </div>
         </form>
 
@@ -269,8 +252,9 @@
                 </div>
             </div>
         </section>
+        </div>
 
-        <section aria-labelledby="history-heading" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <section data-view="history" hidden aria-labelledby="history-heading" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h2 id="history-heading" class="text-base font-bold text-slate-900">Önceki testlerim</h2>
@@ -285,7 +269,26 @@
             <ul id="history-list" class="mt-4 divide-y divide-slate-100 text-sm"></ul>
         </section>
 
-        <section aria-labelledby="rag-heading" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <section id="test-guide" data-view="guide" hidden aria-labelledby="guide-heading" class="max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
+            <h2 id="guide-heading" class="text-lg font-bold text-slate-950">Test rehberi</h2>
+            <ol class="mt-4 list-decimal space-y-3 pl-5 text-sm leading-relaxed text-slate-700">
+                <li><strong>Adresi gir.</strong> <span id="guide-target"></span></li>
+                <li><strong>Kontrolleri seç.</strong> <span id="guide-criteria"></span></li>
+                <li><strong>Bulguları incele.</strong> Beklenen ve gerçekleşen davranışı, kök nedeni ve bağımsız kanıt scriptini karşılaştır.</li>
+                <li><strong>Düzeltmeyi onayla.</strong> Yama yalnızca senin onayınla uygulanır; ardından tüm testler yeniden koşar ve yan etki varsa otomatik geri alınır.</li>
+            </ol>
+            <details class="mt-5 border-t border-slate-100 pt-4 text-sm text-slate-600">
+                <summary class="cursor-pointer font-semibold text-slate-800">Demo adreslerini nasıl kullanırım?</summary>
+                <p class="mt-2">Proje klasöründe <code>python main.py playground</code> çalıştır (veya <code>python main.py demo</code>). Ardından demo düğmelerinden birini seç.</p>
+            </details>
+            <details class="mt-3 text-sm text-slate-600">
+                <summary class="cursor-pointer font-semibold text-slate-800">CI hattında nasıl çalıştırırım?</summary>
+                <pre class="mt-2 overflow-x-auto rounded bg-slate-100 p-2 text-[11px]">python main.py scan --url https://… \
+      --junit report.xml --fail-on HIGH</pre>
+            </details>
+        </section>
+
+        <section data-view="docs" hidden aria-labelledby="rag-heading" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 id="rag-heading" class="text-base font-bold text-slate-900">Proje belgelerine sor</h2>
             <form id="rag-form" class="mt-4 space-y-3">
                 <label for="rag-question" class="block text-sm font-medium text-slate-700">Sorunuz</label>
@@ -862,6 +865,31 @@
             }
         }
 
+        // ---------- Views (one menu item = one page section) ----------
+        const VIEW_SLUGS = {tests: 'testler', history: 'onceki-testlerim', guide: 'rehber', docs: 'belgeler'};
+        const SLUG_VIEWS = Object.fromEntries(Object.entries(VIEW_SLUGS).map(([view, slug]) => [slug, view]));
+
+        function showView(view, {updateHash = true} = {}) {
+            if (!VIEW_SLUGS[view]) view = 'tests';
+            document.querySelectorAll('[data-view]').forEach(section => { section.hidden = section.dataset.view !== view; });
+            document.querySelectorAll('[data-view-link]').forEach(link => {
+                const active = link.dataset.viewLink === view;
+                link.classList.toggle('bg-white/10', active);
+                link.classList.toggle('text-white', active);
+                link.classList.toggle('text-slate-300', !active);
+                if (active) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
+            });
+            if (updateHash && location.hash !== `#${VIEW_SLUGS[view]}`) history.pushState(null, '', `#${VIEW_SLUGS[view]}`);
+            if (view === 'history') loadHistory();
+            window.scrollTo({top: 0});
+        }
+
+        document.querySelectorAll('[data-view-link]').forEach(link => link.addEventListener('click', event => {
+            event.preventDefault();
+            showView(link.dataset.viewLink);
+        }));
+        window.addEventListener('popstate', () => showView(SLUG_VIEWS[location.hash.slice(1)], {updateHash: false}));
+
         // ---------- History ----------
         const SEVERITY_BADGE = {
             CRITICAL: 'bg-rose-600 text-white', HIGH: 'bg-rose-100 text-rose-800',
@@ -942,7 +970,9 @@
             open.type = 'button';
             open.addEventListener('click', async () => {
                 try {
-                    renderRun(await api(`/api/runs/${encodeURIComponent(run.run_id)}`));
+                    const data = await api(`/api/runs/${encodeURIComponent(run.run_id)}`);
+                    showView('tests');
+                    renderRun(data);
                 } catch (err) { alert(err.message); }
             });
             const report = el('a', 'rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold hover:bg-slate-50', 'HTML rapor');
@@ -964,7 +994,7 @@
         }
         $('history-refresh').addEventListener('click', loadHistory);
         $('history-filter').addEventListener('input', renderHistory);
-        loadHistory();
+        showView(SLUG_VIEWS[location.hash.slice(1)] || 'tests', {updateHash: false});
 
         $('logout').addEventListener('click', async () => {
             try { await fetch('/api/auth/logout', {method: 'POST'}); } finally { window.location.replace('/login'); }

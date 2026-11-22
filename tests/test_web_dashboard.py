@@ -167,3 +167,12 @@ def test_sidebar_logo_and_palette(client):
     icon = client.get("/favicon.svg")
     assert icon.status_code == 200 and icon.headers["content-type"].startswith("image/svg+xml")
     assert "<svg" in icon.text
+
+
+def test_menu_items_open_one_section_each(client):
+    html = client.get("/").text
+    for view in ("tests", "history", "guide", "docs"):
+        assert f'data-view-link="{view}"' in html
+    assert '<div data-view="tests"' in html  # the test workspace is shown first
+    for view in ("history", "guide", "docs"):
+        assert f'data-view="{view}" hidden' in html  # the rest wait for their menu item
