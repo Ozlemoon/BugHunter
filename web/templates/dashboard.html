@@ -266,10 +266,10 @@
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h2 id="history-heading" class="text-base font-bold text-slate-900">Önceki testlerim</h2>
-                    <p id="history-count" class="text-xs text-slate-500">Hesabınıza kayıtlı testler, en yenisi en üstte.</p>
+                    <p id="history-count" class="text-xs text-slate-500">Hesabınıza kayıtlı testler burada listelenir.</p>
                 </div>
                 <div class="flex items-center gap-2">
-                    <input id="history-filter" type="search" placeholder="Adrese göre ara" aria-label="Önceki testlerde ara"
+                    <input id="history-filter" type="search" placeholder="Site ara" aria-label="Önceki testlerde site ara"
                            class="w-44 rounded-lg border border-slate-200 px-3 py-1.5 text-xs outline-none focus:border-teal-600">
                     <button type="button" id="history-refresh" class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold hover:bg-slate-50">Yenile</button>
                 </div>
@@ -859,63 +859,95 @@
             MEDIUM: 'bg-amber-100 text-amber-800', LOW: 'bg-slate-100 text-slate-600',
         };
         let historyRuns = [];
+        const openSites = new Set();  // sites the user expanded; kept open across refreshes
+
+        function siteName(url) {
+            try { return new URL(url).host; } catch { return url; }
+        }
 
         function renderHistory() {
             const list = $('history-list');
             const query = $('history-filter').value.trim().toLowerCase();
-            const runs = historyRuns.filter(run => !query || run.target_url.toLowerCase().includes(query));
             list.replaceChildren();
+            // One entry per site; runs inside stay newest first (the API order).
+            const sites = new Map();
+            for (const run of historyRuns) {
+                const name = siteName(run.target_url);
+                if (!sites.has(name)) sites.set(name, []);
+                sites.get(name).push(run);
+            }
             $('history-count').textContent = historyRuns.length
-                ? `Hesabınıza kayıtlı ${historyRuns.length} test, en yenisi en üstte.`
-                : 'Hesabınıza kayıtlı testler, en yenisi en üstte.';
+                ? `${sites.size} site · ${historyRuns.length} test. Ayrıntılar için site adına tıklayın.`
+                : 'Hesabınıza kayıtlı testler burada listelenir.';
             if (!historyRuns.length) {
                 list.appendChild(el('li', 'py-3 text-slate-500', 'Henüz test çalıştırmadınız. Yukarıdan bir adres girip "Testi başlat"a basın.'));
                 return;
             }
-            if (!runs.length) {
-                list.appendChild(el('li', 'py-3 text-slate-500', 'Aramanızla eşleşen test yok.'));
+            const matching = [...sites].filter(([name, runs]) => !query || name.toLowerCase().includes(query)
+                || runs.some(run => run.target_url.toLowerCase().includes(query)));
+            if (!matching.length) {
+                list.appendChild(el('li', 'py-3 text-slate-500', 'Aramanızla eşleşen site yok.'));
                 return;
             }
-            for (const run of runs) {
-                const item = el('li', 'flex flex-wrap items-center justify-between gap-3 py-3');
-                const left = el('div', 'min-w-0 flex-1');
-                const top = el('div', 'flex flex-wrap items-center gap-2');
-                top.appendChild(el('span', 'rounded bg-slate-900 px-1.5 py-0.5 text-[10px] font-bold text-white',
-                    run.target_type === 'WEB' ? 'WEB' : 'API'));
-                top.appendChild(el('span', 'break-all font-mono text-xs text-slate-800', run.target_url));
-                left.appendChild(top);
-                const meta = el('div', 'mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500');
-                meta.appendChild(el('span', '', new Date(run.started_at).toLocaleString('tr-TR')));
-                meta.appendChild(el('span', '', `${run.total_tests} test`));
-                meta.appendChild(el('span', run.failed_tests ? 'font-semibold text-rose-700' : 'font-semibold text-emerald-700',
-                    run.failed_tests ? `${run.failed_tests} başarısız` : 'hepsi geçti'));
-                if (run.worst_severity) {
-                    meta.appendChild(el('span', `rounded px-1.5 py-0.5 text-[10px] font-bold ${SEVERITY_BADGE[run.worst_severity] || ''}`,
-                        `en yüksek: ${run.worst_severity}`));
-                }
-                left.appendChild(meta);
-
-                const actions = el('div', 'flex items-center gap-2');
-                const open = el('button', 'rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700', 'Sonuçları aç');
-                open.type = 'button';
-                open.addEventListener('click', async () => {
-                    try {
-                        renderRun(await api(`/api/runs/${encodeURIComponent(run.run_id)}`));
-                    } catch (err) { alert(err.message); }
-                });
-                const report = el('a', 'rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold hover:bg-slate-50', 'HTML rapor');
-                report.href = `/api/runs/${encodeURIComponent(run.run_id)}/report.html`;
-                report.target = '_blank';
-                report.rel = 'noopener';
-                actions.append(open, report);
-                item.append(left, actions);
+            for (const [name, runs] of matching) {
+                const item = el('li', '');
+                const details = el('details', 'group');
+                details.open = openSites.has(name);
+                details.addEventListener('toggle', () => details.open ? openSites.add(name) : openSites.delete(name));
+                const summary = el('summary', 'flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-2 py-3 hover:bg-slate-50');
+                const label = el('span', 'flex min-w-0 items-center gap-2');
+                label.appendChild(el('span', 'text-slate-400 transition group-open:rotate-90', '›'));
+                label.appendChild(el('span', 'truncate font-semibold text-slate-900', name));
+                summary.appendChild(label);
+                summary.appendChild(el('span', 'shrink-0 text-xs text-slate-500', `${runs.length} test`));
+                details.appendChild(summary);
+                const inner = el('ul', 'mb-2 ml-6 divide-y divide-slate-100 border-l border-slate-200 pl-4');
+                for (const run of runs) inner.appendChild(historyRunItem(run));
+                details.appendChild(inner);
+                item.appendChild(details);
                 list.appendChild(item);
             }
         }
 
+        function historyRunItem(run) {
+            const item = el('li', 'flex flex-wrap items-center justify-between gap-3 py-3');
+            const left = el('div', 'min-w-0 flex-1');
+            const top = el('div', 'flex flex-wrap items-center gap-2');
+            top.appendChild(el('span', 'rounded bg-slate-900 px-1.5 py-0.5 text-[10px] font-bold text-white',
+                run.target_type === 'WEB' ? 'WEB' : 'API'));
+            top.appendChild(el('span', 'break-all font-mono text-[11px] text-slate-500', run.target_url));
+            left.appendChild(top);
+            const meta = el('div', 'mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500');
+            meta.appendChild(el('span', '', new Date(run.started_at).toLocaleString('tr-TR')));
+            meta.appendChild(el('span', '', `${run.total_tests} test`));
+            meta.appendChild(el('span', run.failed_tests ? 'font-semibold text-rose-700' : 'font-semibold text-emerald-700',
+                run.failed_tests ? `${run.failed_tests} başarısız` : 'hepsi geçti'));
+            if (run.worst_severity) {
+                meta.appendChild(el('span', `rounded px-1.5 py-0.5 text-[10px] font-bold ${SEVERITY_BADGE[run.worst_severity] || ''}`,
+                    `en yüksek: ${run.worst_severity}`));
+            }
+            left.appendChild(meta);
+
+            const actions = el('div', 'flex items-center gap-2');
+            const open = el('button', 'rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700', 'Sonuçları aç');
+            open.type = 'button';
+            open.addEventListener('click', async () => {
+                try {
+                    renderRun(await api(`/api/runs/${encodeURIComponent(run.run_id)}`));
+                } catch (err) { alert(err.message); }
+            });
+            const report = el('a', 'rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold hover:bg-slate-50', 'HTML rapor');
+            report.href = `/api/runs/${encodeURIComponent(run.run_id)}/report.html`;
+            report.target = '_blank';
+            report.rel = 'noopener';
+            actions.append(open, report);
+            item.append(left, actions);
+            return item;
+        }
+
         async function loadHistory() {
             try {
-                historyRuns = (await api('/api/runs?limit=50')).runs;
+                historyRuns = (await api('/api/runs?limit=100')).runs;
                 renderHistory();
             } catch (err) {
                 $('history-list').replaceChildren(el('li', 'py-2 text-rose-700', err.message));
