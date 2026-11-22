@@ -97,7 +97,7 @@ def test_config_validation():
 
 
 def test_run_store_rejects_path_traversal(tmp_path):
-    store = RunStore(tmp_path)
+    store = RunStore(tmp_path / "runs.db")
     assert store.load("../../etc/passwd") is None
     assert store.list() == []
 
@@ -125,8 +125,10 @@ def test_credentials_never_reach_disk_reports_or_repro_scripts(api_copy, tmp_pat
     session = session_for(api_copy, tmp_path)
     run = session.start(api_config(api_copy, auth_header=secret))
 
-    stored = next((tmp_path / "reports" / "runs").glob("*.json")).read_text(encoding="utf-8")
+    stored = session.store.load(run.run_id).model_dump_json()
     assert secret not in stored
+    for db_file in (tmp_path / "reports").glob("bughunter.db*"):  # including the WAL journal
+        assert secret.encode() not in db_file.read_bytes()
     for fmt in ("json", "junit", "html"):
         assert secret not in reporting.render(run, fmt)
     assert all(secret not in f.evidence.reproduction_code for f in run.findings)

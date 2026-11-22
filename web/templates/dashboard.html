@@ -21,10 +21,18 @@
             <a href="/" class="text-lg font-bold tracking-tight">BugHunter <span class="text-teal-300">AI</span></a>
             <nav aria-label="Panel" class="flex flex-wrap gap-5 text-sm font-medium text-slate-300">
                 <a href="#test-setup" class="hover:text-white">Testler</a>
-                <a href="#history-heading" class="hover:text-white">Geçmiş</a>
+                <a href="#history-heading" class="hover:text-white">Önceki testlerim</a>
                 <a href="#test-guide" class="hover:text-white">Rehber</a>
                 <a href="#rag-heading" class="hover:text-white">Proje belgeleri</a>
             </nav>
+            <div class="flex items-center gap-3 text-sm">
+                <span class="flex items-center gap-2 text-slate-300">
+                    <span aria-hidden="true" class="flex h-7 w-7 items-center justify-center rounded-full bg-teal-500/20 text-xs font-bold uppercase text-teal-200">{{ username[:1] }}</span>
+                    <span id="current-user" class="font-semibold text-white">{{ username }}</span>
+                </span>
+                <button type="button" id="logout"
+                        class="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/10">Çıkış</button>
+            </div>
         </div>
     </header>
 
@@ -255,9 +263,16 @@
         </section>
 
         <section aria-labelledby="history-heading" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div class="flex items-center justify-between gap-3">
-                <h2 id="history-heading" class="text-base font-bold text-slate-900">Çalışma geçmişi</h2>
-                <button type="button" id="history-refresh" class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold hover:bg-slate-50">Yenile</button>
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h2 id="history-heading" class="text-base font-bold text-slate-900">Önceki testlerim</h2>
+                    <p id="history-count" class="text-xs text-slate-500">Hesabınıza kayıtlı testler, en yenisi en üstte.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input id="history-filter" type="search" placeholder="Adrese göre ara" aria-label="Önceki testlerde ara"
+                           class="w-44 rounded-lg border border-slate-200 px-3 py-1.5 text-xs outline-none focus:border-teal-600">
+                    <button type="button" id="history-refresh" class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold hover:bg-slate-50">Yenile</button>
+                </div>
             </div>
             <ul id="history-list" class="mt-4 divide-y divide-slate-100 text-sm"></ul>
         </section>
@@ -397,6 +412,10 @@
             try { token = sessionStorage.getItem('bughunter-token'); } catch { /* storage blocked */ }
             if (token) headers['X-BugHunter-Token'] = token;
             const response = await fetch(path, {...options, headers});
+            if (response.status === 401 && response.headers.get('x-bughunter-login') === 'required') {
+                window.location.replace('/login');  // session expired or signed out in another tab
+                throw new Error('Oturumunuz kapandı; giriş sayfasına yönlendiriliyorsunuz.');
+            }
             if (response.status === 401 && !options.retried) {
                 const entered = prompt('Bu panel bir API token ile korunuyor. Token:');
                 if (entered) {
@@ -835,34 +854,80 @@
         }
 
         // ---------- History ----------
-        async function loadHistory() {
+        const SEVERITY_BADGE = {
+            CRITICAL: 'bg-rose-600 text-white', HIGH: 'bg-rose-100 text-rose-800',
+            MEDIUM: 'bg-amber-100 text-amber-800', LOW: 'bg-slate-100 text-slate-600',
+        };
+        let historyRuns = [];
+
+        function renderHistory() {
             const list = $('history-list');
-            try {
-                const data = await api('/api/runs?limit=10');
-                list.replaceChildren();
-                if (!data.runs.length) list.appendChild(el('li', 'py-2 text-slate-500', 'Henüz çalışma yok.'));
-                for (const run of data.runs) {
-                    const item = el('li', 'flex flex-wrap items-center justify-between gap-2 py-2');
-                    const left = el('div', 'min-w-0');
-                    left.appendChild(el('span', 'block break-all font-mono text-xs text-slate-800', run.target_url));
-                    left.appendChild(el('span', 'text-[11px] text-slate-500',
-                        `${new Date(run.started_at).toLocaleString('tr-TR')} · ${run.target_type} · ${run.total_tests} test · ${run.failed_tests} başarısız`
-                        + (run.worst_severity ? ` · en yüksek ${run.worst_severity}` : '')));
-                    const open = el('button', 'rounded border border-slate-200 px-2 py-1 text-xs font-semibold hover:bg-slate-50', 'Aç');
-                    open.type = 'button';
-                    open.addEventListener('click', async () => {
-                        try { renderRun(await api(`/api/runs/${encodeURIComponent(run.run_id)}`)); }
-                        catch (err) { alert(err.message); }
-                    });
-                    item.append(left, open);
-                    list.appendChild(item);
+            const query = $('history-filter').value.trim().toLowerCase();
+            const runs = historyRuns.filter(run => !query || run.target_url.toLowerCase().includes(query));
+            list.replaceChildren();
+            $('history-count').textContent = historyRuns.length
+                ? `Hesabınıza kayıtlı ${historyRuns.length} test, en yenisi en üstte.`
+                : 'Hesabınıza kayıtlı testler, en yenisi en üstte.';
+            if (!historyRuns.length) {
+                list.appendChild(el('li', 'py-3 text-slate-500', 'Henüz test çalıştırmadınız. Yukarıdan bir adres girip "Testi başlat"a basın.'));
+                return;
+            }
+            if (!runs.length) {
+                list.appendChild(el('li', 'py-3 text-slate-500', 'Aramanızla eşleşen test yok.'));
+                return;
+            }
+            for (const run of runs) {
+                const item = el('li', 'flex flex-wrap items-center justify-between gap-3 py-3');
+                const left = el('div', 'min-w-0 flex-1');
+                const top = el('div', 'flex flex-wrap items-center gap-2');
+                top.appendChild(el('span', 'rounded bg-slate-900 px-1.5 py-0.5 text-[10px] font-bold text-white',
+                    run.target_type === 'WEB' ? 'WEB' : 'API'));
+                top.appendChild(el('span', 'break-all font-mono text-xs text-slate-800', run.target_url));
+                left.appendChild(top);
+                const meta = el('div', 'mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500');
+                meta.appendChild(el('span', '', new Date(run.started_at).toLocaleString('tr-TR')));
+                meta.appendChild(el('span', '', `${run.total_tests} test`));
+                meta.appendChild(el('span', run.failed_tests ? 'font-semibold text-rose-700' : 'font-semibold text-emerald-700',
+                    run.failed_tests ? `${run.failed_tests} başarısız` : 'hepsi geçti'));
+                if (run.worst_severity) {
+                    meta.appendChild(el('span', `rounded px-1.5 py-0.5 text-[10px] font-bold ${SEVERITY_BADGE[run.worst_severity] || ''}`,
+                        `en yüksek: ${run.worst_severity}`));
                 }
+                left.appendChild(meta);
+
+                const actions = el('div', 'flex items-center gap-2');
+                const open = el('button', 'rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700', 'Sonuçları aç');
+                open.type = 'button';
+                open.addEventListener('click', async () => {
+                    try {
+                        renderRun(await api(`/api/runs/${encodeURIComponent(run.run_id)}`));
+                    } catch (err) { alert(err.message); }
+                });
+                const report = el('a', 'rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold hover:bg-slate-50', 'HTML rapor');
+                report.href = `/api/runs/${encodeURIComponent(run.run_id)}/report.html`;
+                report.target = '_blank';
+                report.rel = 'noopener';
+                actions.append(open, report);
+                item.append(left, actions);
+                list.appendChild(item);
+            }
+        }
+
+        async function loadHistory() {
+            try {
+                historyRuns = (await api('/api/runs?limit=50')).runs;
+                renderHistory();
             } catch (err) {
-                list.replaceChildren(el('li', 'py-2 text-rose-700', err.message));
+                $('history-list').replaceChildren(el('li', 'py-2 text-rose-700', err.message));
             }
         }
         $('history-refresh').addEventListener('click', loadHistory);
+        $('history-filter').addEventListener('input', renderHistory);
         loadHistory();
+
+        $('logout').addEventListener('click', async () => {
+            try { await fetch('/api/auth/logout', {method: 'POST'}); } finally { window.location.replace('/login'); }
+        });
 
         // ---------- Document Q&A ----------
         $('rag-form').addEventListener('submit', async (event) => {

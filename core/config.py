@@ -73,6 +73,8 @@ class Settings:
 
     # When set, every /api/* request must send this value in the X-BugHunter-Token header.
     api_token: str = ""
+    # Whether the login screen offers "Hesap oluştur". The very first account can always be created.
+    allow_signup: bool = True
 
     # Local RAG (Ollama + Chroma)
     ollama_url: str = "http://127.0.0.1:11434"
@@ -97,11 +99,17 @@ class Settings:
             patch_roots=tuple(_resolve(p) for p in roots.split(os.pathsep) if p) or (PROJECT_ROOT,),
             reports_dir=_resolve(_env("REPORTS_DIR", "reports")),
             api_token=_env("API_TOKEN", ""),
+            allow_signup=_env("ALLOW_SIGNUP", "true").strip().lower() not in ("0", "false", "no", "off"),
             ollama_url=_env("OLLAMA_URL", cls.ollama_url).rstrip("/"),
             rag_db=_resolve(_env("RAG_DB", "run_artifacts/rag")),
             rag_chat_model=_env("RAG_CHAT_MODEL", cls.rag_chat_model),
             rag_embed_model=_env("RAG_EMBED_MODEL", cls.rag_embed_model),
         )
+
+    @property
+    def database_path(self) -> Path:
+        """SQLite file holding users, login sessions and run history."""
+        return self.reports_dir / "bughunter.db"
 
     def is_patchable(self, path: str | Path) -> bool:
         """True when `path` resolves inside one of the allowed patch roots."""

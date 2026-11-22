@@ -11,15 +11,17 @@ from __future__ import annotations
 import hmac
 import logging
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
+from urllib.parse import urlsplit
 
 import httpx
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
 from core import reporting
+from core.auth import SESSION_LIFETIME, AuthError, User
 from core.config import get_settings
 from core.engine import (
     HuntConfig,
@@ -57,8 +59,35 @@ def get_session() -> HuntSession:
 # Security & error handling
 # ---------------------------------------------------------------------------
 
+SESSION_COOKIE = "bughunter_session"
+
+
+def current_user(request: Request) -> Optional[User]:
+    return get_session().users.user_for_session(request.cookies.get(SESSION_COOKIE))
+
+
+def require_user(request: Request) -> User:
+    user = current_user(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Oturum açmanız gerekiyor.",
+                            headers={"X-BugHunter-Login": "required"})
+    return user
+
+
+def _cross_site(request: Request) -> bool:
+    """A state-changing request sent by a page on another site (CSRF)."""
+    origin = request.headers.get("origin")
+    if origin is None:
+        return False
+    if origin == "null":
+        return True
+    return urlsplit(origin).netloc.lower() != (request.headers.get("host") or "").lower()
+
+
 @app.middleware("http")
 async def security_middleware(request: Request, call_next):
+    if request.method not in ("GET", "HEAD", "OPTIONS") and _cross_site(request):
+        return JSONResponse(status_code=403, content={"detail": "Başka bir siteden gönderilen istek reddedildi."})
     token = get_settings().api_token
     if token and request.url.path.startswith("/api/"):
         supplied = request.headers.get("x-bughunter-token", "")
@@ -139,14 +168,15 @@ def run_listing(run: HuntRun) -> Dict[str, Any]:
     }
 
 
-def _load(run_id: str) -> HuntRun:
-    run = get_session().get_run(run_id)
+def _load(run_id: str, user: User) -> HuntRun:
+    run = get_session().get_run(run_id, owner_id=user.id)
     if run is None:
         raise HTTPException(status_code=404, detail="Çalışma bulunamadı.")
     return run
 
 
-def _fix_action(action, run_id: str, fix_id: str):
+def _fix_action(action, run_id: str, fix_id: str, user: User):
+    _load(run_id, user)  # 404 unless this user owns the run
     try:
         return action(run_id, fix_id)
     except KeyError as error:
@@ -160,8 +190,76 @@ def _fix_action(action, run_id: str, fix_id: str):
 # ---------------------------------------------------------------------------
 
 @app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request):
-    return templates.TemplateResponse(request=request, name="dashboard.html", context={"version": __version__})
+def dashboard(request: Request):
+    user = current_user(request)
+    if user is None:
+        return RedirectResponse("/login", status_code=303)
+    return templates.TemplateResponse(request=request, name="dashboard.html",
+                                      context={"version": __version__, "username": user.username})
+
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    if current_user(request) is not None:
+        return RedirectResponse("/", status_code=303)
+    first_user = get_session().users.count() == 0
+    return templates.TemplateResponse(request=request, name="login.html", context={
+        "version": __version__,
+        "allow_signup": get_settings().allow_signup or first_user,
+        "first_user": first_user,
+    })
+
+
+class Credentials(BaseModel):
+    username: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=1, max_length=256)
+
+
+def _logged_in(request: Request, user: User) -> JSONResponse:
+    token = get_session().users.create_session(user)
+    response = JSONResponse({"status": "success", "username": user.username})
+    response.set_cookie(SESSION_COOKIE, token, max_age=int(SESSION_LIFETIME.total_seconds()),
+                        httponly=True, samesite="lax", secure=request.url.scheme == "https", path="/")
+    return response
+
+
+@app.post("/api/auth/login")
+def login(request: Request, payload: Credentials):
+    try:
+        user = get_session().users.authenticate(payload.username, payload.password)
+    except AuthError as error:
+        raise HTTPException(status_code=401, detail=str(error)) from error
+    return _logged_in(request, user)
+
+
+@app.post("/api/auth/register")
+def register(request: Request, payload: Credentials):
+    current = get_session()
+    first_user = current.users.count() == 0
+    if not (get_settings().allow_signup or first_user):
+        raise HTTPException(status_code=403, detail="Yeni hesap oluşturma kapalı. Yöneticinizden hesap isteyin.")
+    try:
+        user = current.users.create(payload.username, payload.password)
+    except AuthError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    if first_user:
+        # Tests run before accounts existed (and from the CLI) belong to the first account.
+        claimed = current.store.assign_unowned(user.id)
+        logger.info("First account %s now owns %d earlier runs", user.username, claimed)
+    return _logged_in(request, user)
+
+
+@app.post("/api/auth/logout")
+def logout(request: Request):
+    get_session().users.end_session(request.cookies.get(SESSION_COOKIE))
+    response = JSONResponse({"status": "logged_out"})
+    response.delete_cookie(SESSION_COOKIE, path="/")
+    return response
+
+
+@app.get("/api/auth/me")
+def me(user: User = Depends(require_user)):
+    return {"username": user.username}
 
 
 @app.get("/healthz")
@@ -170,7 +268,7 @@ async def healthz():
 
 
 @app.get("/api/config")
-async def dashboard_config():
+def dashboard_config(user: User = Depends(require_user)):
     settings = get_settings()
     return {
         "version": __version__,
@@ -188,7 +286,7 @@ async def dashboard_config():
 
 
 @app.post("/api/runs")
-def start_run(config: HuntConfig):
+def start_run(config: HuntConfig, user: User = Depends(require_user)):
     """Plan → run → analyse → draft fixes (never applied without approval)."""
     current = get_session()
     if config.source_file is None:
@@ -199,7 +297,7 @@ def start_run(config: HuntConfig):
         except ValueError:
             pass  # auto-detected demo file not patchable here: collect evidence only
     try:
-        run = current.start(config)
+        run = current.start(config, owner_id=user.id)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     return run_payload(run)
@@ -213,29 +311,31 @@ class LegacyHuntRequest(BaseModel):
 
 
 @app.post("/api/run-hunt", deprecated=True)
-def run_hunt(payload: LegacyHuntRequest):
+def run_hunt(payload: LegacyHuntRequest, user: User = Depends(require_user)):
     """Backwards-compatible alias of POST /api/runs."""
     known = [c for c in payload.criteria if c in {x.value for x in ALL_CRITERIA}]
     return start_run(HuntConfig(target_url=payload.target_url, target_type=payload.target_type,
-                                criteria=known, sla_threshold_ms=payload.sla_threshold_ms))
+                                criteria=known, sla_threshold_ms=payload.sla_threshold_ms), user)
 
 
 @app.get("/api/runs")
-def list_runs(limit: int = 20):
-    return {"runs": [run_listing(run) for run in get_session().store.list(limit=max(1, min(limit, 100)))]}
+def list_runs(limit: int = 20, user: User = Depends(require_user)):
+    """The signed-in user's earlier runs ("Önceki testlerim"), newest first."""
+    runs = get_session().store.list(limit=max(1, min(limit, 100)), owner_id=user.id)
+    return {"runs": [run_listing(run) for run in runs]}
 
 
 @app.get("/api/runs/{run_id}")
-def get_run(run_id: str):
-    return run_payload(_load(run_id))
+def get_run(run_id: str, user: User = Depends(require_user)):
+    return run_payload(_load(run_id, user))
 
 
 @app.get("/api/runs/{run_id}/report.{fmt}")
-def download_report(run_id: str, fmt: str):
+def download_report(run_id: str, fmt: str, user: User = Depends(require_user)):
     names = {"json": "json", "xml": "junit", "html": "html"}
     if fmt not in names:
         raise HTTPException(status_code=404, detail="Desteklenen biçimler: json, xml, html.")
-    run = _load(run_id)
+    run = _load(run_id, user)
     media_type = reporting.FORMATS[names[fmt]][0]
     disposition = "inline" if fmt == "html" else "attachment"
     return Response(
@@ -246,22 +346,22 @@ def download_report(run_id: str, fmt: str):
 
 
 @app.post("/api/runs/{run_id}/fixes/{fix_id}/approve")
-def approve_fix(run_id: str, fix_id: str):
+def approve_fix(run_id: str, fix_id: str, user: User = Depends(require_user)):
     """Human approval: apply the patch, then re-run the whole suite for regressions."""
-    report = _fix_action(get_session().approve, run_id, fix_id)
+    report = _fix_action(get_session().approve, run_id, fix_id, user)
     return {"status": "success", "fix_id": fix_id, "report": report.model_dump(mode="json"),
             "proposal": get_session().get_run(run_id).finding_for_fix(fix_id).proposal.model_dump(mode="json")}
 
 
 @app.post("/api/runs/{run_id}/fixes/{fix_id}/reject")
-def reject_fix(run_id: str, fix_id: str):
-    proposal = _fix_action(get_session().reject, run_id, fix_id)
+def reject_fix(run_id: str, fix_id: str, user: User = Depends(require_user)):
+    proposal = _fix_action(get_session().reject, run_id, fix_id, user)
     return {"status": "rejected", "fix_id": fix_id, "proposal": proposal.model_dump(mode="json")}
 
 
 @app.post("/api/runs/{run_id}/fixes/{fix_id}/rollback")
-def rollback_fix(run_id: str, fix_id: str):
-    proposal = _fix_action(get_session().rollback, run_id, fix_id)
+def rollback_fix(run_id: str, fix_id: str, user: User = Depends(require_user)):
+    proposal = _fix_action(get_session().rollback, run_id, fix_id, user)
     return {"status": "rolled_back", "fix_id": fix_id, "proposal": proposal.model_dump(mode="json")}
 
 
@@ -270,7 +370,7 @@ class RagQuestion(BaseModel):
 
 
 @app.post("/api/rag/ask")
-def ask_documents(payload: RagQuestion):
+def ask_documents(payload: RagQuestion, user: User = Depends(require_user)):
     question = payload.question.strip()
     if not question:
         raise HTTPException(status_code=422, detail="Bir soru yazın.")

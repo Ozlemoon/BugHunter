@@ -20,7 +20,13 @@ def client(api_copy, tmp_path, monkeypatch):
         settle_seconds=0,
     )
     monkeypatch.setattr(web_app, "session", session)
-    return TestClient(web_app.app)
+    return signed_in(TestClient(web_app.app))
+
+
+def signed_in(client, username="tester", password="dogru-sifre-123"):
+    response = client.post("/api/auth/register", json={"username": username, "password": password})
+    assert response.status_code == 200, response.text
+    return client
 
 
 def start(client, api_copy, **overrides):
@@ -32,16 +38,15 @@ def start(client, api_copy, **overrides):
     return response.json()
 
 
-def test_dashboard_homepage_renders():
-    response = TestClient(web_app.app).get("/")
+def test_dashboard_homepage_renders(client):
+    response = client.get("/")
     assert response.status_code == 200
-    for text in ("BugHunter AI", "Test çalışma alanı", "Test rehberi", "Proje belgelerine sor", "Çalışma geçmişi"):
+    for text in ("BugHunter AI", "Test çalışma alanı", "Test rehberi", "Proje belgelerine sor", "Önceki testlerim", "tester"):
         assert text in response.text
     assert response.headers["x-frame-options"] == "DENY"
 
 
-def test_healthz_and_config():
-    client = TestClient(web_app.app)
+def test_healthz_and_config(client):
     assert client.get("/healthz").json()["status"] == "ok"
     config = client.get("/api/config").json()
     assert {d["target_type"] for d in config["demo_targets"]} == {"API", "WEB"}
@@ -123,12 +128,12 @@ def test_api_token_protects_api_routes(client, monkeypatch):
 
 def test_unreachable_target_returns_502(tmp_path, monkeypatch):
     monkeypatch.setattr(web_app, "session", HuntSession(settings=Settings(reports_dir=tmp_path)))
-    response = TestClient(web_app.app).post("/api/runs", json={"target_url": "http://127.0.0.1:9/openapi.json"})
+    response = signed_in(TestClient(web_app.app)).post("/api/runs", json={"target_url": "http://127.0.0.1:9/openapi.json"})
     assert response.status_code == 502
 
 
-def test_page_declares_its_version_so_a_stale_server_is_detected():
-    html = TestClient(web_app.app).get("/").text
+def test_page_declares_its_version_so_a_stale_server_is_detected(client):
+    html = client.get("/").text
     assert f'data-version="{web_app.__version__}"' in html
     assert 'id="server-warning"' in html
 
@@ -138,7 +143,7 @@ def test_findings_carry_remediation_and_page_groups_by_risk(client, api_copy):
     first = data["findings"][0]
     assert first["evidence"]["severity"] == "CRITICAL"
     assert first["remediation"]["headline"] and first["remediation"]["steps"]
-    html = TestClient(web_app.app).get("/").text
+    html = client.get("/").text
     for text in ("Yüksek riskli bulgular", "Düşük riskli ve bilgi amaçlı", "Çözüm önerisi", "text-rose-700"):
         assert text in html
 
@@ -148,6 +153,6 @@ def test_run_payload_exposes_error_sources_and_advice(client, api_copy):
     assert data["recommendations"][0]["advice"] and data["recommendations"][0]["locations"]
     first = data["findings"][0]["remediation"]
     assert first["source_label"] and first["source_side"] and first["location"]
-    html = TestClient(web_app.app).get("/").text
+    html = client.get("/").text
     for text in ("Tavsiyeler ve hata kaynakları", "Hatanın kaynağı", 'id="url-hint"', 'role="radiogroup"'):
         assert text in html

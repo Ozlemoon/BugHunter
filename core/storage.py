@@ -1,13 +1,13 @@
-"""File-based run history: one JSON document per hunt under reports/runs/."""
+"""Run history stored in the SQLite database (reports/bughunter.db)."""
 
 from __future__ import annotations
 
 import logging
-import os
 import re
-import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional
+
+from core.database import Database
 
 if TYPE_CHECKING:
     from core.engine import HuntRun
@@ -18,51 +18,102 @@ RUN_ID_PATTERN = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{6}$")
 
 
 class RunStore:
-    def __init__(self, directory: Path):
-        self.directory = Path(directory)
+    """
+    One row per hunt. `owner_id` is the dashboard user who started it; runs
+    started from the CLI have no owner. JSON files from the older file-based
+    history (reports/runs/*.json) are imported once, without an owner.
+    """
 
-    def _path(self, run_id: str) -> Path:
-        if not RUN_ID_PATTERN.match(run_id):
-            raise ValueError("Invalid run id.")
-        return self.directory / f"{run_id}.json"
+    def __init__(self, database: Database | Path, legacy_dir: Optional[Path] = None):
+        self.db = database if isinstance(database, Database) else Database(database)
+        if legacy_dir is not None:
+            self._import_legacy(Path(legacy_dir))
 
-    def save(self, run: HuntRun) -> Path:
-        """Atomic write so a crash never leaves a half-written report."""
+    # ------------------------------------------------------------------
+    def save(self, run: HuntRun, owner_id: Optional[int] = None) -> None:
+        """Insert or update. An existing owner is kept when `owner_id` is not given."""
         from core.redaction import redact_run
 
-        self.directory.mkdir(parents=True, exist_ok=True)
-        target = self._path(run.run_id)
+        if not RUN_ID_PATTERN.match(run.run_id):
+            raise ValueError("Invalid run id.")
         run = redact_run(run)
-        fd, tmp = tempfile.mkstemp(dir=self.directory, suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                f.write(run.model_dump_json(indent=2))
-            os.replace(tmp, target)
-        except BaseException:
-            Path(tmp).unlink(missing_ok=True)
-            raise
-        return target
+        worst = run.worst_severity()
+        with self.db.connect() as db:
+            db.execute(
+                """INSERT INTO runs (run_id, owner_id, started_at, target_type, target_url,
+                                     total_tests, failed_tests, worst_severity, data)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(run_id) DO UPDATE SET
+                       owner_id = COALESCE(excluded.owner_id, runs.owner_id),
+                       total_tests = excluded.total_tests, failed_tests = excluded.failed_tests,
+                       worst_severity = excluded.worst_severity, data = excluded.data""",
+                (run.run_id, owner_id, run.started_at.isoformat(), run.config.target_type.value,
+                 run.config.target_url, run.summary.total_tests, run.summary.failed_tests,
+                 worst.value if worst else None, run.model_dump_json()),
+            )
 
-    def load(self, run_id: str) -> Optional[HuntRun]:
+    def load(self, run_id: str, owner_id: Optional[int] = None) -> Optional[HuntRun]:
+        """`owner_id` given → only that user's run is returned."""
         from core.engine import HuntRun
 
-        try:
-            path = self._path(run_id)
-        except ValueError:
+        if not RUN_ID_PATTERN.match(run_id or ""):
             return None
-        if not path.is_file():
-            return None
-        return HuntRun.model_validate_json(path.read_text(encoding="utf-8"))
+        query, params = "SELECT data FROM runs WHERE run_id = ?", [run_id]
+        if owner_id is not None:
+            query += " AND owner_id = ?"
+            params.append(owner_id)
+        with self.db.connect() as db:
+            row = db.execute(query, params).fetchone()
+        return HuntRun.model_validate_json(row["data"]) if row else None
 
-    def list(self, limit: int = 20) -> List[HuntRun]:
+    def owner_of(self, run_id: str) -> Optional[int]:
+        with self.db.connect() as db:
+            row = db.execute("SELECT owner_id FROM runs WHERE run_id = ?", (run_id,)).fetchone()
+        return row["owner_id"] if row else None
+
+    def list(self, limit: int = 20, owner_id: Optional[int] = None) -> List[HuntRun]:
+        """Newest first. `owner_id` given → only that user's runs; otherwise all runs."""
         from core.engine import HuntRun
 
-        if not self.directory.is_dir():
-            return []
+        query, params = "SELECT run_id, data FROM runs", []
+        if owner_id is not None:
+            query += " WHERE owner_id = ?"
+            params.append(owner_id)
+        query += " ORDER BY started_at DESC, run_id DESC LIMIT ?"
+        params.append(limit)
+        with self.db.connect() as db:
+            rows = db.execute(query, params).fetchall()
         runs = []
-        for path in sorted(self.directory.glob("*.json"), reverse=True)[:limit]:
+        for row in rows:
             try:
-                runs.append(HuntRun.model_validate_json(path.read_text(encoding="utf-8")))
-            except ValueError as error:  # skip corrupted/old-format files
-                logger.warning("Skipping unreadable run file %s: %s", path.name, error)
+                runs.append(HuntRun.model_validate_json(row["data"]))
+            except ValueError as error:  # skip rows from an incompatible older version
+                logger.warning("Skipping unreadable run %s: %s", row["run_id"], error)
         return runs
+
+    def assign_unowned(self, owner_id: int) -> int:
+        """Gives every run without an owner to `owner_id`; returns how many."""
+        with self.db.connect() as db:
+            return db.execute("UPDATE runs SET owner_id = ? WHERE owner_id IS NULL", (owner_id,)).rowcount
+
+    # ------------------------------------------------------------------
+    def _import_legacy(self, directory: Path) -> None:
+        from core.engine import HuntRun
+
+        if not directory.is_dir():
+            return
+        imported = 0
+        for path in sorted(directory.glob("*.json")):
+            if not RUN_ID_PATTERN.match(path.stem) or self._exists(path.stem):
+                continue
+            try:
+                self.save(HuntRun.model_validate_json(path.read_text(encoding="utf-8")))
+                imported += 1
+            except ValueError as error:
+                logger.warning("Skipping unreadable run file %s: %s", path.name, error)
+        if imported:
+            logger.info("Imported %d runs from %s into the database", imported, directory)
+
+    def _exists(self, run_id: str) -> bool:
+        with self.db.connect() as db:
+            return db.execute("SELECT 1 FROM runs WHERE run_id = ?", (run_id,)).fetchone() is not None

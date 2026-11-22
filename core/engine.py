@@ -36,6 +36,8 @@ from core.models import (
 from core.patcher import CodePatcher, HumanApprovalGate
 from core.remediation import Recommendation, Remediation, advise, recommend
 from core.runner import TestRunner
+from core.auth import UserStore
+from core.database import Database
 from core.storage import RunStore
 from core.targets.api_target import ApiTargetParser
 from core.targets.web_target import WebTargetParser
@@ -232,7 +234,10 @@ class HuntSession:
         settle_seconds: Optional[float] = None,
     ):
         self.settings = settings or get_settings()
-        self.store = store if store is not None else RunStore(self.settings.reports_dir / "runs")
+        if store is None:
+            store = RunStore(Database(self.settings.database_path), legacy_dir=self.settings.reports_dir / "runs")
+        self.store = store
+        self.users = UserStore(store.db)
         self.runner = TestRunner(timeout=self.settings.request_timeout)
         self.analyzer = BugAnalyzer()
         self.gate = HumanApprovalGate()
@@ -275,6 +280,7 @@ class HuntSession:
         on_result: Optional[Callable[[TestCase, TestResult], None]] = None,
         persist: bool = True,
         on_plan: Optional[Callable[[List[TestCase]], None]] = None,
+        owner_id: Optional[int] = None,
     ) -> HuntRun:
         """Plans and runs the suite, gathers evidence and drafts (unapproved) fixes."""
         source_file = resolve_source_file(config.source_file, self.settings)
@@ -303,12 +309,15 @@ class HuntSession:
             run.summary = summarize(run)
             self._runs[run.run_id] = run
             if persist:
-                self.store.save(run)
+                self.store.save(run, owner_id=owner_id)
             logger.info("Run %s: %d tests, %d failed", run.run_id, run.summary.total_tests, run.summary.failed_tests)
             return run
 
     # ------------------------------------------------------------------
-    def get_run(self, run_id: str) -> Optional[HuntRun]:
+    def get_run(self, run_id: str, owner_id: Optional[int] = None) -> Optional[HuntRun]:
+        """`owner_id` given → None unless that user started the run."""
+        if owner_id is not None and self.store.owner_of(run_id) != owner_id:
+            return None
         return self._runs.get(run_id) or self.store.load(run_id)
 
     def _active_finding(self, run_id: str, fix_id: str) -> tuple[HuntRun, Finding]:
