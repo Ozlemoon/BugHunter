@@ -86,6 +86,11 @@ class UserStore:
         with self.db.connect() as db:
             return db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
 
+    def username(self, user_id: int) -> Optional[str]:
+        with self.db.connect() as db:
+            row = db.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
+        return row["username"] if row else None
+
     def create(self, username: str, password: str) -> User:
         username = (username or "").strip()
         if not USERNAME_PATTERN.match(username):

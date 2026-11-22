@@ -379,6 +379,55 @@ BUGHUNTER_SMTP_FROM=adresiniz@gmail.com</pre>
                     </div>
                 </div>
             </div>
+
+            <section aria-labelledby="schedule-heading" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h3 id="schedule-heading" class="flex items-center gap-2 text-lg font-bold text-slate-950">
+                            <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg>
+                            Zamanlanmış rapor
+                        </h3>
+                        <p class="mt-1 max-w-2xl text-sm text-slate-500">Seçtiğiniz aralıkla, o dönemde çalıştırdığınız testlerde bulunan hatalar derlenir ve tek bir özet e-postası olarak gönderilir.</p>
+                    </div>
+                </div>
+
+                <form id="schedule-form" novalidate class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.3fr)_auto] xl:items-end">
+                    <div class="md:col-span-2 xl:col-span-1">
+                        <label for="schedule-recipients" class="mb-1 block text-sm font-semibold text-slate-800">Alıcılar</label>
+                        <input id="schedule-recipients" type="text" inputmode="email" spellcheck="false"
+                               placeholder="ben@ornek.com" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20">
+                    </div>
+                    <div>
+                        <label for="schedule-interval" class="mb-1 block text-sm font-semibold text-slate-800">Sıklık</label>
+                        <select id="schedule-interval" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 bg-white">
+                            <option value="1">Her gün</option>
+                            <option value="3" selected>3 günde bir</option>
+                            <option value="7">Haftada bir</option>
+                            <option value="14">2 haftada bir</option>
+                            <option value="30">30 günde bir</option>
+                            <option value="custom">Özel…</option>
+                        </select>
+                        <input id="schedule-custom-days" type="number" min="1" max="30" value="5" hidden aria-label="Kaç günde bir"
+                               class="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20">
+                    </div>
+                    <div>
+                        <label for="schedule-time" class="mb-1 block text-sm font-semibold text-slate-800">Saat</label>
+                        <input id="schedule-time" type="time" value="09:00" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20">
+                    </div>
+                    <div>
+                        <label for="schedule-site" class="mb-1 block text-sm font-semibold text-slate-800">Kapsam</label>
+                        <select id="schedule-site" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 bg-white"><option value="">Tüm siteler</option></select>
+                    </div>
+                    <button type="submit" id="schedule-create"
+                            class="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60">
+                        Zamanla
+                    </button>
+                </form>
+                <p id="schedule-result" hidden role="status" class="mt-3 rounded-lg px-3 py-2 text-sm"></p>
+                <p class="mt-3 text-xs text-slate-500">Saatler bu bilgisayarın saatine göredir. Raporlar panel açıkken gönderilir; panel kapalıyken gönderim zamanı geçerse panel açıldığında bir kez gönderilir.</p>
+
+                <ul id="schedule-list" class="mt-5 divide-y divide-slate-100 border-t border-slate-100"></ul>
+            </section>
         </section>
     </main>
     </div>
@@ -1008,6 +1057,12 @@ BUGHUNTER_SMTP_FROM=adresiniz@gmail.com</pre>
             }
             if (mailRuns.some(run => run.run_id === previous)) select.value = previous;
             $('mail-run-empty').hidden = mailRuns.length > 0;
+            const siteSelect = $('schedule-site');
+            const chosenSite = siteSelect.value;
+            siteSelect.replaceChildren(new Option('Tüm siteler', ''));
+            for (const name of groups.keys()) siteSelect.appendChild(new Option(name, name));
+            siteSelect.value = [...groups.keys()].includes(chosenSite) ? chosenSite : '';
+            loadSchedules();
             select.disabled = !mailRuns.length;
             $('mail-send').disabled = !mailRuns.length;
             updateMailPreview();
@@ -1058,6 +1113,113 @@ BUGHUNTER_SMTP_FROM=adresiniz@gmail.com</pre>
                 showMailResult(err.message, false);
             } finally {
                 button.disabled = false;
+            }
+        });
+
+        // ---------- Scheduled digests ----------
+        const formatLocal = iso => iso ? new Date(iso).toLocaleString('tr-TR', {dateStyle: 'medium', timeStyle: 'short'}) : '—';
+        const intervalLabel = days => ({1: 'Her gün', 7: 'Haftada bir', 14: '2 haftada bir'})[days] || `${days} günde bir`;
+
+        function showScheduleResult(message, ok) {
+            const box = $('schedule-result');
+            box.textContent = message;
+            box.className = `mt-3 rounded-lg px-3 py-2 text-sm ${ok ? 'bg-blue-50 text-blue-800' : 'bg-rose-50 text-rose-700'}`;
+            box.hidden = false;
+        }
+
+        function scheduleItem(schedule) {
+            const item = el('li', 'flex flex-wrap items-center justify-between gap-3 py-4');
+            const left = el('div', 'min-w-0 flex-1');
+            const title = el('div', 'flex flex-wrap items-center gap-2');
+            title.appendChild(el('span', 'font-semibold text-slate-900',
+                `${intervalLabel(schedule.interval_days)} · ${schedule.send_time}`));
+            title.appendChild(el('span', 'rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-600',
+                schedule.site || 'Tüm siteler'));
+            title.appendChild(el('span', schedule.active
+                ? 'rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-semibold text-blue-700'
+                : 'rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800',
+                schedule.active ? 'Etkin' : 'Duraklatıldı'));
+            left.appendChild(title);
+            left.appendChild(el('div', 'mt-1 break-all text-xs text-slate-600', schedule.recipients.join(', ')));
+            const meta = el('div', 'mt-1 flex flex-wrap gap-x-4 text-[11px] text-slate-500');
+            meta.appendChild(el('span', '', schedule.active ? `Sonraki gönderim: ${formatLocal(schedule.next_run_at)}` : 'Gönderim durduruldu'));
+            meta.appendChild(el('span', '', `Son gönderim: ${formatLocal(schedule.last_sent_at)}`));
+            left.appendChild(meta);
+            if (schedule.last_error) left.appendChild(el('div', 'mt-1 text-[11px] text-rose-700', `Son deneme başarısız: ${schedule.last_error}`));
+
+            const actions = el('div', 'flex flex-wrap items-center gap-2');
+            const button = (label, cls, handler) => {
+                const b = el('button', `rounded-lg px-3 py-1.5 text-xs font-semibold ${cls}`, label);
+                b.type = 'button';
+                b.addEventListener('click', async () => {
+                    b.disabled = true;
+                    try { await handler(); } catch (err) { showScheduleResult(err.message, false); }
+                    finally { b.disabled = false; }
+                });
+                return b;
+            };
+            const base = `/api/schedules/${schedule.id}`;
+            actions.append(
+                button('Şimdi gönder', 'bg-slate-900 text-white hover:bg-slate-700', async () => {
+                    const result = await api(`${base}/send-now`, {method: 'POST'});
+                    showScheduleResult(`Özet rapor gönderildi (${result.runs} test çalıştırması): ${schedule.recipients.join(', ')}`, true);
+                    loadSchedules();
+                }),
+                button(schedule.active ? 'Duraklat' : 'Sürdür', 'border border-slate-200 hover:bg-slate-50', async () => {
+                    await api(base, {method: 'PATCH', body: JSON.stringify({active: !schedule.active})});
+                    loadSchedules();
+                }),
+                button('Sil', 'border border-rose-200 text-rose-700 hover:bg-rose-50', async () => {
+                    if (!confirm('Bu zamanlanmış rapor silinsin mi?')) return;
+                    await api(base, {method: 'DELETE'});
+                    loadSchedules();
+                }),
+            );
+            item.append(left, actions);
+            return item;
+        }
+
+        async function loadSchedules() {
+            const list = $('schedule-list');
+            try {
+                const data = await api('/api/schedules');
+                list.replaceChildren();
+                if (!data.schedules.length) {
+                    list.appendChild(el('li', 'py-4 text-sm text-slate-500', 'Henüz zamanlanmış rapor yok.'));
+                }
+                for (const schedule of data.schedules) list.appendChild(scheduleItem(schedule));
+            } catch (err) {
+                list.replaceChildren(el('li', 'py-4 text-sm text-rose-700', err.message));
+            }
+        }
+
+        $('schedule-interval').addEventListener('change', () => {
+            $('schedule-custom-days').hidden = $('schedule-interval').value !== 'custom';
+        });
+
+        $('schedule-form').addEventListener('submit', async event => {
+            event.preventDefault();
+            const recipients = $('schedule-recipients').value.split(/[,;\s]+/).filter(Boolean);
+            const invalid = recipients.find(address => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(address));
+            if (!recipients.length) return showScheduleResult('En az bir e-posta adresi yazın.', false);
+            if (invalid) return showScheduleResult(`Geçersiz e-posta adresi: ${invalid}`, false);
+            const choice = $('schedule-interval').value;
+            const days = choice === 'custom' ? Number($('schedule-custom-days').value) : Number(choice);
+            if (!Number.isInteger(days) || days < 1 || days > 30) return showScheduleResult('Gün sayısı 1 ile 30 arasında olmalı.', false);
+            const time = $('schedule-time').value;
+            if (!/^\d{2}:\d{2}$/.test(time)) return showScheduleResult('Bir saat seçin.', false);
+            $('schedule-create').disabled = true;
+            try {
+                const created = await api('/api/schedules', {method: 'POST', body: JSON.stringify({
+                    recipients, interval_days: days, send_time: time, site: $('schedule-site').value || null,
+                })});
+                showScheduleResult(`Zamanlandı. İlk özet ${formatLocal(created.next_run_at)} tarihinde gönderilecek.`, true);
+                $('schedule-recipients').value = '';
+                loadSchedules();
+            } catch (err) {
+                showScheduleResult(err.message, false);
+            } finally {
+                $('schedule-create').disabled = false;
             }
         });
 

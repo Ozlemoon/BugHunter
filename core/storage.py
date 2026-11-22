@@ -98,6 +98,24 @@ class RunStore:
                 logger.warning("Skipping unreadable run %s: %s", row["run_id"], error)
         return runs
 
+    def list_since(self, owner_id: int, since: datetime, limit: int = 500) -> List[HuntRun]:
+        """The user's runs started at or after `since`, newest first."""
+        from core.engine import HuntRun
+
+        with self.db.connect() as db:
+            rows = db.execute(
+                "SELECT run_id, data FROM runs WHERE owner_id = ? AND started_at >= ? "
+                "ORDER BY started_at DESC LIMIT ?",
+                (owner_id, since.astimezone(timezone.utc).isoformat(), limit),
+            ).fetchall()
+        runs = []
+        for row in rows:
+            try:
+                runs.append(HuntRun.model_validate_json(row["data"]))
+            except ValueError as error:
+                logger.warning("Skipping unreadable run %s: %s", row["run_id"], error)
+        return runs
+
     def assign_unowned(self, owner_id: int) -> int:
         """Gives every run without an owner to `owner_id`; returns how many."""
         with self.db.connect() as db:

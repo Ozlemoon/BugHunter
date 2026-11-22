@@ -83,6 +83,8 @@ class Settings:
     # Address recipients use for the "Raporu görüntüle" button; defaults to http://host:port.
     public_url: str = ""
     share_link_days: int = 30
+    # Background thread that sends scheduled digests ("Zamanlanmış rapor").
+    scheduler_enabled: bool = True
 
     # Whether the login screen offers "Hesap oluştur". The very first account can always be created.
     allow_signup: bool = True
@@ -118,6 +120,7 @@ class Settings:
             smtp_security=_env("SMTP_SECURITY", cls.smtp_security).strip().lower(),
             public_url=_env("PUBLIC_URL", "").rstrip("/"),
             share_link_days=_env_int("SHARE_LINK_DAYS", cls.share_link_days),
+            scheduler_enabled=_env("SCHEDULER", "on").strip().lower() not in ("0", "false", "no", "off"),
             allow_signup=_env("ALLOW_SIGNUP", "true").strip().lower() not in ("0", "false", "no", "off"),
             ollama_url=_env("OLLAMA_URL", cls.ollama_url).rstrip("/"),
             rag_db=_resolve(_env("RAG_DB", "run_artifacts/rag")),

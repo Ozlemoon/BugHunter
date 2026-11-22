@@ -16,7 +16,8 @@ from email.headerregistry import Address
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterable, List, Optional
+from datetime import datetime
+from typing import TYPE_CHECKING, Dict, Iterable, List, Optional
 from urllib.parse import urlsplit
 
 from core import reporting
@@ -94,6 +95,75 @@ def build_message(run: HuntRun, recipients: List[str], sender: str, report_url: 
                                          filename="bughunter.png", disposition="inline")
     message.add_attachment(reporting.render(run, "html").encode("utf-8"), maintype="text", subtype="html",
                            filename=f"bughunter-{run.run_id}.html")
+    return message
+
+
+SEVERITY_ORDER = ("CRITICAL", "HIGH", "MEDIUM", "LOW")
+
+
+def digest_context(runs: List[HuntRun], since: datetime, until: datetime, interval_days: int,
+                   site: Optional[str], report_links: Dict[str, str]) -> dict:
+    """Groups the period's runs by site: counts, severities and the most important bugs."""
+    sites: Dict[str, dict] = {}
+    for run in runs:  # newest first
+        name = system_name(run.config.target_url)
+        entry = sites.setdefault(name, {"name": name, "runs": 0, "total": 0, "passed": 0, "failed": 0,
+                                        "severity": {k: 0 for k in SEVERITY_ORDER}, "bugs": {},
+                                        "last_run": run.started_at, "link": report_links.get(name)})
+        entry["runs"] += 1
+        entry["total"] += run.summary.total_tests
+        entry["passed"] += run.summary.passed_tests
+        entry["failed"] += run.summary.failed_tests
+        for finding in run.findings:
+            if finding.remediation is not None and not finding.remediation.noteworthy:
+                continue  # probable false alarms stay out of the digest
+            title = finding.remediation.headline if finding.remediation else finding.evidence.title
+            location = (finding.remediation.location if finding.remediation else "") or finding.evidence.endpoint or ""
+            # The same failing test in an older run is the same bug (titles may carry timings).
+            key = finding.evidence.test_id or title
+            if key not in entry["bugs"]:  # runs are newest first, so the latest wording wins
+                entry["bugs"][key] = {"title": title, "location": location,
+                                      "severity": finding.evidence.severity.value}
+    for entry in sites.values():
+        for bug in entry["bugs"].values():
+            entry["severity"][bug["severity"]] = entry["severity"].get(bug["severity"], 0) + 1
+        bugs = sorted(entry["bugs"].values(), key=lambda b: SEVERITY_ORDER.index(b["severity"])
+                      if b["severity"] in SEVERITY_ORDER else 9)
+        entry["bug_count"] = len(bugs)
+        entry["top_bugs"] = bugs[:5]
+        entry["more_bugs"] = max(0, len(bugs) - 5)
+    ordered = sorted(sites.values(), key=lambda e: (-e["severity"]["CRITICAL"], -e["severity"]["HIGH"], -e["failed"]))
+    return {
+        "sites": ordered,
+        "since": since.astimezone(), "until": until.astimezone(), "interval_days": interval_days, "site": site,
+        "totals": {"runs": len(runs), "tests": sum(e["total"] for e in ordered),
+                   "passed": sum(e["passed"] for e in ordered), "failed": sum(e["failed"] for e in ordered),
+                   "bugs": sum(e["bug_count"] for e in ordered),
+                   "critical": sum(e["severity"]["CRITICAL"] + e["severity"]["HIGH"] for e in ordered)},
+    }
+
+
+def build_digest(runs: List[HuntRun], recipients: List[str], sender: str, since: datetime, until: datetime,
+                 interval_days: int, site: Optional[str], report_links: Dict[str, str], sent_by: str) -> EmailMessage:
+    context = digest_context(runs, since, until, interval_days, site, report_links)
+    totals = context["totals"]
+    period = "son 24 saat" if interval_days == 1 else f"son {interval_days} gün"
+    logo_cid = make_msgid(domain="bughunter.local")
+    context.update(period=period, sent_by=sent_by, logo_src=f"cid:{logo_cid[1:-1]}")
+
+    message = EmailMessage()
+    scope = f"{site} · " if site else ""
+    message["Subject"] = (f"BugHunter özet raporu: {scope}{period} · {totals['tests']} test · "
+                          f"{totals['bugs']} hata" if runs else f"BugHunter özet raporu: {scope}{period} · yeni test yok")
+    message["From"] = sender
+    message["To"] = ", ".join(recipients)
+    message["Date"] = formatdate(localtime=True)
+    message["Message-ID"] = make_msgid(domain=_domain(sender))
+    env = reporting.environment()
+    message.set_content(env.get_template("digest.txt").render(**context))
+    message.add_alternative(env.get_template("digest.html").render(**context), subtype="html")
+    message.get_payload()[1].add_related(LOGO.read_bytes(), maintype="image", subtype="png", cid=logo_cid,
+                                         filename="bughunter.png", disposition="inline")
     return message
 
 

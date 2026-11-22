@@ -1,0 +1,15 @@
+BugHunter zamanlanmış özet raporu
+{{ period[:1]|upper }}{{ period[1:] }} içinde bulunan hatalar{% if site %} · {{ site }}{% endif %}
+{{ since.strftime("%d.%m.%Y %H:%M") }} – {{ until.strftime("%d.%m.%Y %H:%M") }}
+
+Toplam test: {{ totals.tests }} · Başarılı: {{ totals.passed }} · Başarısız: {{ totals.failed }} · Farklı hata: {{ totals.bugs }}
+{% if not sites %}
+Bu dönemde yeni test çalıştırılmadı.
+{% endif %}{% for entry in sites %}
+== {{ entry.name }} ==
+{{ entry.runs }} çalıştırma · {{ entry.total }} test · {{ entry.passed }} başarılı · {{ entry.failed }} başarısız
+{% for bug in entry.top_bugs %}  [{{ bug.severity }}] {{ bug.title }}{% if bug.location %} ({{ bug.location }}){% endif %}
+{% endfor %}{% if entry.more_bugs %}  ve {{ entry.more_bugs }} hata daha
+{% endif %}{% if entry.link %}Raporu görüntüle: {{ entry.link }}
+{% endif %}{% endfor %}
+Bu özet {{ sent_by }} kullanıcısının zamanlanmış raporudur ({{ interval_days }} günde bir).

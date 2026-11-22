@@ -41,6 +41,20 @@ CREATE TABLE IF NOT EXISTS report_shares (
     expires_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS email_schedules (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    recipients    TEXT NOT NULL,
+    interval_days INTEGER NOT NULL,
+    send_time     TEXT NOT NULL,
+    site          TEXT,
+    active        INTEGER NOT NULL DEFAULT 1,
+    next_run_at   TEXT NOT NULL,
+    last_sent_at  TEXT,
+    last_error    TEXT,
+    created_at    TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS runs_by_owner ON runs(owner_id, started_at DESC);
 """
 

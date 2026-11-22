@@ -12,6 +12,7 @@ import hmac
 import logging
 import threading
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 from urllib.parse import urlsplit
@@ -22,7 +23,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
-from core import mailer, reporting
+from core import mailer, reporting, schedules
 from core.auth import SESSION_LIFETIME, AuthError, User
 from core.config import get_settings
 from core.engine import (
@@ -44,7 +45,17 @@ BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 logger = logging.getLogger(__name__)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    scheduler = schedules.Scheduler(lambda: get_session())
+    if get_settings().scheduler_enabled:
+        scheduler.start()
+    yield
+    scheduler.stop()
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title="BugHunter AI Web Dashboard",
     version=__version__,
     description="Human-in-the-loop autonomous API & web testing: evidence, safe patches, regression checks.",
@@ -439,6 +450,72 @@ def shared_report(token: str):
             "<p style='color:#475569'>Bu bağlantının süresi dolmuş ya da bağlantı hatalı. "
             "Raporu gönderen kişiden yeni bir bağlantı isteyin veya e-postanın ekindeki HTML dosyasını açın.</p></body>"))
     return HTMLResponse(reporting.render(run, "html"), headers={"X-Robots-Tag": "noindex", "Referrer-Policy": "no-referrer"})
+
+
+class ScheduleRequest(BaseModel):
+    recipients: Union[str, List[str]]
+    interval_days: int = Field(ge=1, le=schedules.MAX_INTERVAL_DAYS)
+    send_time: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    site: Optional[str] = Field(default=None, max_length=255)
+
+
+class ScheduleUpdate(BaseModel):
+    active: bool
+
+
+def _schedule_store() -> schedules.ScheduleStore:
+    return schedules.ScheduleStore(get_session().store.db)
+
+
+def _own_schedule(schedule_id: int, user: User) -> schedules.Schedule:
+    schedule = _schedule_store().get(schedule_id, owner_id=user.id)
+    if schedule is None:
+        raise HTTPException(status_code=404, detail="Zamanlanmış rapor bulunamadı.")
+    return schedule
+
+
+@app.get("/api/schedules")
+def list_schedules(user: User = Depends(require_user)):
+    return {"schedules": [s.as_dict() for s in _schedule_store().list(user.id)],
+            "mail_configured": get_settings().mail_configured}
+
+
+@app.post("/api/schedules")
+def create_schedule(payload: ScheduleRequest, user: User = Depends(require_user)):
+    try:
+        schedule = _schedule_store().create(user.id, payload.recipients, payload.interval_days,
+                                            payload.send_time, payload.site)
+    except schedules.ScheduleError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return schedule.as_dict()
+
+
+@app.patch("/api/schedules/{schedule_id}")
+def update_schedule(schedule_id: int, payload: ScheduleUpdate, user: User = Depends(require_user)):
+    _own_schedule(schedule_id, user)
+    return _schedule_store().set_active(schedule_id, user.id, payload.active).as_dict()
+
+
+@app.delete("/api/schedules/{schedule_id}")
+def delete_schedule(schedule_id: int, user: User = Depends(require_user)):
+    _own_schedule(schedule_id, user)
+    _schedule_store().delete(schedule_id, user.id)
+    return {"status": "deleted"}
+
+
+@app.post("/api/schedules/{schedule_id}/send-now")
+def send_schedule_now(schedule_id: int, user: User = Depends(require_user)):
+    """Sends this schedule's digest right away; the regular timing is not changed."""
+    schedule = _own_schedule(schedule_id, user)
+    if not get_settings().mail_configured:
+        raise HTTPException(status_code=503, detail=mailer.NOT_CONFIGURED)
+    _check_mail_rate(user)
+    try:
+        count = schedules.send_digest(get_session(), schedule)
+    except mailer.MailError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    _schedule_store().record(schedule.id, schedules._now(), None)
+    return {"status": "sent", "runs": count, "schedule": _schedule_store().get(schedule.id).as_dict()}
 
 
 class RagQuestion(BaseModel):
