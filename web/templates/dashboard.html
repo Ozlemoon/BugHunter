@@ -270,23 +270,213 @@
             <ul id="history-list" class="mt-4 divide-y divide-slate-100 text-sm"></ul>
         </section>
 
-        <section id="test-guide" data-view="guide" hidden aria-labelledby="guide-heading" class="max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
-            <h2 id="guide-heading" class="text-lg font-bold text-slate-950">Test rehberi</h2>
-            <ol class="mt-4 list-decimal space-y-3 pl-5 text-sm leading-relaxed text-slate-700">
-                <li><strong>Adresi gir.</strong> <span id="guide-target"></span></li>
-                <li><strong>Kontrolleri seç.</strong> <span id="guide-criteria"></span></li>
-                <li><strong>Bulguları incele.</strong> Beklenen ve gerçekleşen davranışı, kök nedeni ve bağımsız kanıt scriptini karşılaştır.</li>
-                <li><strong>Düzeltmeyi onayla.</strong> Yama yalnızca senin onayınla uygulanır; ardından tüm testler yeniden koşar ve yan etki varsa otomatik geri alınır.</li>
-            </ol>
-            <details class="mt-5 border-t border-slate-100 pt-4 text-sm text-slate-600">
-                <summary class="cursor-pointer font-semibold text-slate-800">Demo adreslerini nasıl kullanırım?</summary>
-                <p class="mt-2">Proje klasöründe <code>python main.py playground</code> çalıştır (veya <code>python main.py demo</code>). Ardından demo düğmelerinden birini seç.</p>
-            </details>
-            <details class="mt-3 text-sm text-slate-600">
-                <summary class="cursor-pointer font-semibold text-slate-800">CI hattında nasıl çalıştırırım?</summary>
-                <pre class="mt-2 overflow-x-auto rounded bg-slate-100 p-2 text-[11px]">python main.py scan --url https://… \
-      --junit report.xml --fail-on HIGH</pre>
-            </details>
+        <section id="test-guide" data-view="guide" hidden aria-labelledby="guide-heading" class="space-y-6">
+            <header class="overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 px-6 py-8 text-white shadow-lg sm:px-10">
+                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">Rehber</p>
+                <h2 id="guide-heading" class="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">BugHunter'ı adım adım kullanın</h2>
+                <p class="mt-2 max-w-2xl text-sm leading-relaxed text-slate-300">Testi başlatmaktan bulguları okumaya, düzeltmeleri onaylamaktan raporları paylaşmaya kadar her şey burada. Takıldığınız yeri sağdaki asistana sorabilirsiniz.</p>
+                <nav aria-label="Rehber bölümleri" class="mt-6 flex flex-wrap gap-2 text-xs font-semibold">
+                    <a href="#g-start" class="guide-toc rounded-full border border-white/15 bg-white/5 px-3 py-1.5 hover:bg-white/10">Başlarken</a>
+                    <a href="#g-criteria" class="guide-toc rounded-full border border-white/15 bg-white/5 px-3 py-1.5 hover:bg-white/10">Test kriterleri</a>
+                    <a href="#g-results" class="guide-toc rounded-full border border-white/15 bg-white/5 px-3 py-1.5 hover:bg-white/10">Sonuçları okumak</a>
+                    <a href="#g-fixes" class="guide-toc rounded-full border border-white/15 bg-white/5 px-3 py-1.5 hover:bg-white/10">Düzeltmeler</a>
+                    <a href="#g-reports" class="guide-toc rounded-full border border-white/15 bg-white/5 px-3 py-1.5 hover:bg-white/10">Raporlar ve e-posta</a>
+                    <a href="#g-cli" class="guide-toc rounded-full border border-white/15 bg-white/5 px-3 py-1.5 hover:bg-white/10">Komut satırı ve CI</a>
+                    <a href="#g-tips" class="guide-toc rounded-full border border-white/15 bg-white/5 px-3 py-1.5 hover:bg-white/10">İpuçları</a>
+                </nav>
+            </header>
+
+            <div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+                <div class="min-w-0 space-y-6">
+                    <!-- Başlarken -->
+                    <article id="g-start" class="scroll-mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <h3 class="text-lg font-semibold text-slate-950">Başlarken</h3>
+                        <p class="mt-1 text-sm text-slate-500">Dört adımda ilk testinizi çalıştırın.</p>
+                        <ol class="mt-5 grid gap-4 sm:grid-cols-2">
+                            <li class="rounded-xl border border-slate-200 p-4">
+                                <span class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">1</span>
+                                <p class="mt-3 font-semibold text-slate-900">Adresi girin</p>
+                                <p class="mt-1 text-sm leading-relaxed text-slate-600"><span id="guide-target"></span></p>
+                            </li>
+                            <li class="rounded-xl border border-slate-200 p-4">
+                                <span class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">2</span>
+                                <p class="mt-3 font-semibold text-slate-900">Kontrolleri seçin</p>
+                                <p class="mt-1 text-sm leading-relaxed text-slate-600"><span id="guide-criteria"></span></p>
+                            </li>
+                            <li class="rounded-xl border border-slate-200 p-4">
+                                <span class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">3</span>
+                                <p class="mt-3 font-semibold text-slate-900">Bulguları inceleyin</p>
+                                <p class="mt-1 text-sm leading-relaxed text-slate-600">Her hata için beklenen ve gerçekleşen davranış, hatanın kaynağı, tam yeri ve tek başına çalışan bir kanıt scripti gösterilir.</p>
+                            </li>
+                            <li class="rounded-xl border border-slate-200 p-4">
+                                <span class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">4</span>
+                                <p class="mt-3 font-semibold text-slate-900">Düzeltmeyi onaylayın</p>
+                                <p class="mt-1 text-sm leading-relaxed text-slate-600">Yama yalnızca sizin onayınızla uygulanır; ardından tüm testler yeniden çalışır, yan etki varsa yama otomatik geri alınır.</p>
+                            </li>
+                        </ol>
+                        <p class="mt-4 rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">Kendi bilgisayarınızda denemek için proje klasöründe <code class="rounded bg-white px-1.5 py-0.5 text-xs">python main.py playground</code> çalıştırın, sonra "Testler" bölümündeki <strong>Demo API</strong> veya <strong>Demo web</strong> örneğini seçin.</p>
+                    </article>
+
+                    <!-- Test kriterleri -->
+                    <article id="g-criteria" class="scroll-mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <h3 class="text-lg font-semibold text-slate-950">Test kriterleri</h3>
+                        <p class="mt-1 text-sm text-slate-500">Hangi kontrolün ne aradığı.</p>
+                        <div class="mt-5 grid gap-3 sm:grid-cols-2">
+                            <div class="rounded-xl border border-slate-200 p-4">
+                                <div class="flex items-center justify-between gap-2"><p class="font-semibold text-slate-900">İşlevsellik</p><span class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">API · WEB</span></div>
+                                <p class="mt-1 text-sm text-slate-600">Beklenen yanıt geliyor mu, yanıt belgelenen şemaya uyuyor mu, geçerli bir form gönderilebiliyor mu?</p>
+                            </div>
+                            <div class="rounded-xl border border-slate-200 p-4">
+                                <div class="flex items-center justify-between gap-2"><p class="font-semibold text-slate-900">Sınır değerleri</p><span class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">API · WEB</span></div>
+                                <p class="mt-1 text-sm text-slate-600">Negatif sayılar, eksik zorunlu alanlar, yanlış tipte veriler ve var olmayan kayıtlar denenir.</p>
+                            </div>
+                            <div class="rounded-xl border border-slate-200 p-4">
+                                <div class="flex items-center justify-between gap-2"><p class="font-semibold text-slate-900">Güvenlik</p><span class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">API · WEB</span></div>
+                                <p class="mt-1 text-sm text-slate-600">Kimliksiz veya geçersiz token ile yapılan işlemler, yansıyan XSS ve eksik güvenlik başlıkları aranır.</p>
+                            </div>
+                            <div class="rounded-xl border border-slate-200 p-4">
+                                <div class="flex items-center justify-between gap-2"><p class="font-semibold text-slate-900">Yanıt süresi</p><span class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">API · WEB</span></div>
+                                <p class="mt-1 text-sm text-slate-600">Yalnızca okuma isteklerinin süresi eşikle (varsayılan 500 ms) karşılaştırılır.</p>
+                            </div>
+                            <div class="rounded-xl border border-slate-200 p-4 sm:col-span-2">
+                                <div class="flex items-center justify-between gap-2"><p class="font-semibold text-slate-900">Web doğrulama</p><span class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">WEB</span></div>
+                                <p class="mt-1 text-sm text-slate-600">Kırık bağlantılar ile eksik görsel, script ve stil dosyaları bulunur. Web taramasında yalnızca aynı alan adındaki sayfalar gezilir.</p>
+                            </div>
+                        </div>
+                    </article>
+
+                    <!-- Sonuçları okumak -->
+                    <article id="g-results" class="scroll-mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <h3 class="text-lg font-semibold text-slate-950">Sonuçları okumak</h3>
+                        <p class="mt-1 text-sm text-slate-500">Bulgular risk seviyesine göre gruplanır; en acil olan en üsttedir.</p>
+                        <div class="mt-5 overflow-hidden rounded-xl border border-slate-200">
+                            <div class="flex items-start gap-4 border-b border-slate-100 p-4">
+                                <span class="mt-0.5 w-20 shrink-0 rounded bg-rose-600 px-2 py-1 text-center text-[11px] font-bold text-white">CRITICAL</span>
+                                <p class="text-sm text-slate-600"><strong class="text-slate-900">Hemen düzeltin.</strong> Sunucu çöküyor (HTTP 5xx) ya da kimlik doğrulaması olmadan yıkıcı bir işlem yapılabiliyor.</p>
+                            </div>
+                            <div class="flex items-start gap-4 border-b border-slate-100 p-4">
+                                <span class="mt-0.5 w-20 shrink-0 rounded bg-rose-100 px-2 py-1 text-center text-[11px] font-bold text-rose-800">HIGH</span>
+                                <p class="text-sm text-slate-600"><strong class="text-slate-900">Önce bunlar.</strong> Geçersiz girdiler kabul ediliyor, XSS açığı var.</p>
+                            </div>
+                            <div class="flex items-start gap-4 border-b border-slate-100 p-4">
+                                <span class="mt-0.5 w-20 shrink-0 rounded bg-amber-100 px-2 py-1 text-center text-[11px] font-bold text-amber-800">MEDIUM</span>
+                                <p class="text-sm text-slate-600"><strong class="text-slate-900">Planlı olarak ele alın.</strong> Yavaş yanıtlar, belgeyle uyuşmayan cevaplar, kırık bağlantılar.</p>
+                            </div>
+                            <div class="flex items-start gap-4 p-4">
+                                <span class="mt-0.5 w-20 shrink-0 rounded bg-slate-100 px-2 py-1 text-center text-[11px] font-bold text-slate-600">LOW</span>
+                                <p class="text-sm text-slate-600"><strong class="text-slate-900">İsteğe bağlı.</strong> Eksik güvenlik başlıkları ve muhtemel yanlış alarmlar (ör. uydurma bir kimlikle alınan 404).</p>
+                            </div>
+                        </div>
+                        <div class="mt-5 grid gap-3 sm:grid-cols-2">
+                            <div class="rounded-xl bg-slate-50 p-4"><p class="text-sm font-semibold text-slate-900">Hatanın kaynağı</p><p class="mt-1 text-sm text-slate-600">Hatanın türü ve sistemin hangi tarafında olduğu, ör. "Eksik girdi doğrulaması · Sunucu tarafı".</p></div>
+                            <div class="rounded-xl bg-slate-50 p-4"><p class="text-sm font-semibold text-slate-900">Nerede</p><p class="mt-1 text-sm text-slate-600">Değiştirilmesi gereken tam yer, ör. "POST /orders işleyicisi · alan: quantity".</p></div>
+                            <div class="rounded-xl bg-slate-50 p-4"><p class="text-sm font-semibold text-slate-900">Tavsiyeler</p><p class="mt-1 text-sm text-slate-600">Sonuçların üstünde, hatalar kaynağa göre gruplanır ve her grup için genel bir öneri verilir.</p></div>
+                            <div class="rounded-xl bg-slate-50 p-4"><p class="text-sm font-semibold text-slate-900">Kanıt scripti</p><p class="mt-1 text-sm text-slate-600">reproduce_bug.py hata sürüyorsa 1, düzeldiyse 0 ile biter; hatayı başkasına göstermek için idealdir.</p></div>
+                        </div>
+                    </article>
+
+                    <!-- Düzeltmeler -->
+                    <article id="g-fixes" class="scroll-mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <h3 class="text-lg font-semibold text-slate-950">Düzeltme akışı</h3>
+                        <p class="mt-1 text-sm text-slate-500">BugHunter kodunuza onayınız olmadan asla dokunmaz.</p>
+                        <ol class="mt-5 grid gap-3 sm:grid-cols-5">
+                            <li class="rounded-xl border border-slate-200 p-3 text-center"><p class="text-[11px] font-bold uppercase tracking-wider text-blue-600">1</p><p class="mt-1 text-sm font-semibold text-slate-900">Öneri</p><p class="mt-1 text-xs text-slate-500">Yama farkı (diff) gösterilir</p></li>
+                            <li class="rounded-xl border border-slate-200 p-3 text-center"><p class="text-[11px] font-bold uppercase tracking-wider text-blue-600">2</p><p class="mt-1 text-sm font-semibold text-slate-900">Onay</p><p class="mt-1 text-xs text-slate-500">"Onayla" ya da "Reddet"</p></li>
+                            <li class="rounded-xl border border-slate-200 p-3 text-center"><p class="text-[11px] font-bold uppercase tracking-wider text-blue-600">3</p><p class="mt-1 text-sm font-semibold text-slate-900">Yedek</p><p class="mt-1 text-xs text-slate-500">.bughunter.bak dosyası</p></li>
+                            <li class="rounded-xl border border-slate-200 p-3 text-center"><p class="text-[11px] font-bold uppercase tracking-wider text-blue-600">4</p><p class="mt-1 text-sm font-semibold text-slate-900">Yeniden test</p><p class="mt-1 text-xs text-slate-500">Tüm testler tekrar koşar</p></li>
+                            <li class="rounded-xl border border-slate-200 p-3 text-center"><p class="text-[11px] font-bold uppercase tracking-wider text-blue-600">5</p><p class="mt-1 text-sm font-semibold text-slate-900">Geri alma</p><p class="mt-1 text-xs text-slate-500">Sorun varsa otomatik</p></li>
+                        </ol>
+                        <p class="mt-4 text-sm text-slate-600">Yama hatayı çözmezse ya da daha önce geçen bir testi bozarsa kendiliğinden geri alınır. Uygulanmış bir yamayı "Geri al" düğmesiyle istediğiniz zaman geri çevirebilirsiniz.</p>
+                    </article>
+
+                    <!-- Raporlar ve e-posta -->
+                    <article id="g-reports" class="scroll-mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <h3 class="text-lg font-semibold text-slate-950">Raporlar ve e-posta</h3>
+                        <p class="mt-1 text-sm text-slate-500">Sonuçları saklayın ve paylaşın.</p>
+                        <div class="mt-5 grid gap-3 md:grid-cols-3">
+                            <div class="rounded-xl border border-slate-200 p-4">
+                                <p class="font-semibold text-slate-900">İndirilebilir raporlar</p>
+                                <p class="mt-1 text-sm text-slate-600"><strong>HTML</strong> okumak için, <strong>JUnit XML</strong> CI araçları için, <strong>JSON</strong> tam kayıt için. Kimlik bilgileri hiçbirine yazılmaz.</p>
+                            </div>
+                            <div class="rounded-xl border border-slate-200 p-4">
+                                <p class="font-semibold text-slate-900">E-postayla gönder</p>
+                                <p class="mt-1 text-sm text-slate-600">Bir testi 10 adrese kadar gönderin. E-postada sistem adı, test sayıları ve "Raporu görüntüle" düğmesi olur; HTML rapor ekte gelir.</p>
+                            </div>
+                            <div class="rounded-xl border border-slate-200 p-4">
+                                <p class="font-semibold text-slate-900">Zamanlanmış rapor</p>
+                                <p class="mt-1 text-sm text-slate-600">Örneğin 3 günde bir 09:00'da, o dönemde bulunan hataların özeti gelsin. Panel açıkken gönderilir.</p>
+                            </div>
+                        </div>
+                        <button type="button" data-goto-view="mail" class="mt-4 inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">"Rapor gönder" bölümüne git →</button>
+                    </article>
+
+                    <!-- Komut satırı -->
+                    <article id="g-cli" class="scroll-mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <h3 class="text-lg font-semibold text-slate-950">Komut satırı ve CI</h3>
+                        <p class="mt-1 text-sm text-slate-500">Paneli açmadan, otomatik hatlarda kullanmak için.</p>
+                        <div class="mt-5 space-y-4 text-sm">
+                            <div>
+                                <p class="font-semibold text-slate-900">Etkileşimli test (düzeltmeleri sorar)</p>
+                                <pre class="mt-2 overflow-x-auto rounded-lg bg-slate-950 p-3 text-xs text-slate-100">python main.py hunt --url https://api.ornek.com/openapi.json</pre>
+                            </div>
+                            <div>
+                                <p class="font-semibold text-slate-900">CI taraması (soru sormaz, koda dokunmaz)</p>
+                                <pre class="mt-2 overflow-x-auto rounded-lg bg-slate-950 p-3 text-xs text-slate-100">python main.py scan --url https://api.ornek.com/openapi.json \
+    --junit report.xml --fail-on HIGH</pre>
+                            </div>
+                            <div class="grid gap-2 sm:grid-cols-3">
+                                <div class="rounded-lg bg-slate-50 p-3"><code class="text-xs font-bold">0</code><p class="text-xs text-slate-600">Eşiği aşan hata yok</p></div>
+                                <div class="rounded-lg bg-slate-50 p-3"><code class="text-xs font-bold">1</code><p class="text-xs text-slate-600">--fail-on seviyesinde ya da üstünde hata var</p></div>
+                                <div class="rounded-lg bg-slate-50 p-3"><code class="text-xs font-bold">2</code><p class="text-xs text-slate-600">Hedefe ulaşılamadı</p></div>
+                            </div>
+                        </div>
+                    </article>
+
+                    <!-- İpuçları -->
+                    <article id="g-tips" class="scroll-mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <h3 class="text-lg font-semibold text-slate-950">İpuçları</h3>
+                        <ul class="mt-4 space-y-3 text-sm text-slate-600">
+                            <li class="flex gap-3"><span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600"></span><span><strong class="text-slate-900">Uzak sitelerde</strong> yanıt süresi eşiğini 2000–3000 ms seçin; internet üzerindeki sunucular yerel olanlardan yavaştır.</span></li>
+                            <li class="flex gap-3"><span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600"></span><span><strong class="text-slate-900">Ortak demo sunucularda</strong> güvenlik kriterini kapatın; silme gibi yıkıcı istekler gönderebilir. Yalnızca izniniz olan sistemleri test edin.</span></li>
+                            <li class="flex gap-3"><span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600"></span><span><strong class="text-slate-900">Korumalı API'lerde</strong> "Kimlik doğrulama ve düzeltme hedefi" bölümüne <code class="rounded bg-slate-100 px-1 text-xs">Bearer …</code> değerini yazın; raporlara asla kaydedilmez.</span></li>
+                            <li class="flex gap-3"><span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600"></span><span><strong class="text-slate-900">"Panel sunucusu güncel değil"</strong> uyarısında paneli Ctrl+C ile durdurup <code class="rounded bg-slate-100 px-1 text-xs">python main.py web</code> ile yeniden başlatın.</span></li>
+                        </ul>
+                    </article>
+                </div>
+
+                <!-- Assistant + FAQ -->
+                <aside class="space-y-4 xl:sticky xl:top-6" aria-label="Rehber asistanı">
+                    <div class="flex max-h-[calc(100vh-3rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                        <div class="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-950 px-4 py-3 text-white">
+                            <div class="flex items-center gap-2">
+                                <svg aria-hidden="true" viewBox="0 0 24 24" class="h-5 w-5 text-blue-300" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M19 15l.8 1.9 1.9.8-1.9.8L19 20.4l-.8-1.9-1.9-.8 1.9-.8z"/></svg>
+                                <h3 class="text-sm font-semibold">Rehber asistanı</h3>
+                            </div>
+                            <span id="guide-model" class="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-slate-300">Ollama</span>
+                        </div>
+                        <div id="guide-chat" class="min-h-[220px] flex-1 space-y-3 overflow-y-auto p-4 text-sm" aria-live="polite">
+                            <div class="rounded-xl rounded-tl-sm bg-slate-50 p-3 text-slate-700">Merhaba! BugHunter'ı kullanırken aklınıza takılanı kendi cümlelerinizle sorun; kullanım kılavuzunda anlamca en yakın bölümü bulup gösteririm. İsterseniz "Yapay zekâ ile açıkla" ile yerel modele anlattırabilirsiniz.</div>
+                        </div>
+                        <form id="guide-form" class="border-t border-slate-100 p-3">
+                            <div class="flex items-end gap-2">
+                                <textarea id="guide-question" rows="1" maxlength="500" placeholder="Bir soru yazın…" aria-label="Asistana soru"
+                                          class="max-h-32 min-h-[40px] flex-1 resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20"></textarea>
+                                <button type="submit" id="guide-send" aria-label="Gönder"
+                                        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
+                                    <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg>
+                                </button>
+                            </div>
+                            <p id="guide-status" class="mt-2 text-[11px] text-slate-500">Sorunuz Ollama ile kılavuzda anlamına göre aranır; yanıt yaklaşık bir saniyede gelir.</p>
+                        </form>
+                    </div>
+
+                    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <h3 class="text-sm font-semibold text-slate-900">Sık sorulan sorular</h3>
+                        <p class="mt-0.5 text-[11px] text-slate-500">Seçin; yanıt kılavuzdan anında gelir.</p>
+                        <ul id="guide-faqs" class="mt-3 space-y-1.5"></ul>
+                    </div>
+                </aside>
+            </div>
         </section>
 
         <section data-view="docs" hidden aria-labelledby="rag-heading" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -1010,6 +1200,7 @@ BUGHUNTER_SMTP_FROM=adresiniz@gmail.com</pre>
             if (updateHash && location.hash !== `#${VIEW_SLUGS[view]}`) history.pushState(null, '', `#${VIEW_SLUGS[view]}`);
             if (view === 'history') loadHistory();
             if (view === 'mail') loadMailView();
+            if (view === 'guide') loadGuide();
             window.scrollTo({top: 0});
         }
 
@@ -1018,6 +1209,217 @@ BUGHUNTER_SMTP_FROM=adresiniz@gmail.com</pre>
             showView(link.dataset.viewLink);
         }));
         window.addEventListener('popstate', () => showView(SLUG_VIEWS[location.hash.slice(1)], {updateHash: false}));
+
+        // ---------- Guide assistant ----------
+        let guideLoaded = false;
+        let guideBusy = false;
+        const guideHistory = [];
+
+        function renderRich(container, text) {
+            // Plain text with "- " / "1. " lists and **bold**; built from text nodes, never innerHTML.
+            container.replaceChildren();
+            let list = null;
+            for (const raw of text.split('\n')) {
+                const line = raw.trim();
+                const bullet = line.match(/^(?:[-*•]|\d+[.)])\s+(.*)$/);
+                if (!line) { list = null; continue; }
+                let target;
+                if (bullet) {
+                    const ordered = /^\d/.test(line);
+                    if (!list || list.dataset.ordered !== String(ordered)) {
+                        list = el(ordered ? 'ol' : 'ul', ordered ? 'ml-4 list-decimal space-y-1' : 'ml-4 list-disc space-y-1');
+                        list.dataset.ordered = String(ordered);
+                        container.appendChild(list);
+                    }
+                    target = el('li', '');
+                    list.appendChild(target);
+                } else {
+                    list = null;
+                    target = el('p', 'mb-1.5 last:mb-0');
+                    container.appendChild(target);
+                }
+                (bullet ? bullet[1] : line).split(/(\*\*[^*]+\*\*)/).forEach(part => {
+                    if (/^\*\*[^*]+\*\*$/.test(part)) target.appendChild(el('strong', 'font-semibold text-slate-900', part.slice(2, -2)));
+                    else if (part) target.appendChild(document.createTextNode(part));
+                });
+            }
+        }
+
+        function guideBubble(role, text = '', label = null) {
+            const wrap = el('div', role === 'user' ? 'flex justify-end' : 'flex justify-start');
+            const bubble = el('div', role === 'user'
+                ? 'max-w-[85%] rounded-xl rounded-tr-sm bg-blue-600 px-3 py-2 text-white'
+                : 'max-w-[92%] rounded-xl rounded-tl-sm bg-slate-50 px-3 py-2 text-slate-700');
+            if (label) bubble.appendChild(el('p', 'mb-1 text-[10px] font-bold uppercase tracking-wider text-blue-600', label));
+            const body = el('div', 'leading-relaxed');
+            if (role === 'user') body.textContent = text; else renderRich(body, text);
+            bubble.appendChild(body);
+            wrap.appendChild(bubble);
+            $('guide-chat').appendChild(wrap);
+            $('guide-chat').scrollTop = $('guide-chat').scrollHeight;
+            return {bubble, body};
+        }
+
+        async function loadGuide() {
+            if (guideLoaded) return;
+            guideLoaded = true;
+            try {
+                const data = await api('/api/guide');
+                $('guide-model').textContent = `Ollama · ${data.search_model}`;
+                $('guide-model').title = `Arama: ${data.search_model} · Açıklama: ${data.model}`;
+                const list = $('guide-faqs');
+                list.replaceChildren();
+                for (const faq of data.faqs) {
+                    const item = el('li', '');
+                    const button = el('button', 'w-full rounded-lg border border-slate-200 px-3 py-2 text-left text-xs font-medium text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-800', faq.question);
+                    button.type = 'button';
+                    button.addEventListener('click', () => answerFromGuide(faq));
+                    item.appendChild(button);
+                    list.appendChild(item);
+                }
+                fetch('/api/guide/warmup', {method: 'POST'}).catch(() => {});  // load the models in the background
+            } catch (err) {
+                guideLoaded = false;
+                $('guide-faqs').replaceChildren(el('li', 'text-xs text-rose-700', err.message));
+            }
+        }
+
+        function explainButton(bubble, question) {
+            const more = el('button', 'mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 hover:underline',
+                '✦ Yapay zekâ ile açıkla');
+            more.type = 'button';
+            more.title = 'Yerel model (Ollama) kılavuza dayanarak kendi cümleleriyle anlatır; bu bilgisayarda birkaç dakika sürebilir.';
+            more.addEventListener('click', () => { more.remove(); askGuide(question, {echo: false, generate: true}); });
+            bubble.appendChild(more);
+            bubble.appendChild(el('p', 'text-[10px] text-slate-400', 'Yerel model kullanır; birkaç dakika sürebilir.'));
+        }
+
+        function answerFromGuide(faq, {echo = true} = {}) {
+            if (echo) guideBubble('user', faq.question);
+            const {bubble} = guideBubble('assistant', faq.answer, 'Kılavuzdan');
+            explainButton(bubble, faq.question);
+            guideHistory.push({role: 'user', content: faq.question}, {role: 'assistant', content: faq.answer});
+        }
+
+        async function streamGuide(body) {
+            const headers = {'Content-Type': 'application/json'};
+            try { const t = sessionStorage.getItem('bughunter-token'); if (t) headers['X-BugHunter-Token'] = t; } catch { /* ignore */ }
+            const response = await fetch('/api/guide/ask', {method: 'POST', headers, body: JSON.stringify(body)});
+            if (response.status === 401) { window.location.replace('/login'); throw new Error('Oturum kapandı.'); }
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                throw new Error(typeof data.detail === 'string' ? data.detail : `Sunucu yanıt veremedi (HTTP ${response.status}).`);
+            }
+            return response.body.getReader();
+        }
+
+        async function* guideEvents(reader) {
+            const decoder = new TextDecoder();
+            let buffer = '';
+            for (;;) {
+                const {value, done} = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, {stream: true});
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+                for (const line of lines) if (line.trim()) yield JSON.parse(line);
+            }
+        }
+
+        async function askGuide(question, {echo = true, generate = false} = {}) {
+            if (guideBusy) return;
+            guideBusy = true;
+            $('guide-send').disabled = true;
+            if (echo) guideBubble('user', question);
+            const {bubble, body} = guideBubble('assistant', '', generate ? 'Yapay zekâ açıklaması' : 'Asistan');
+            const waiting = el('p', 'animate-pulse text-xs text-slate-500',
+                generate ? 'Yerel model hazırlanıyor…' : 'Kılavuzda aranıyor…');
+            body.replaceChildren(waiting);
+            let answer = '';
+            const started = Date.now();
+            const ticker = generate ? setInterval(() => {
+                if (!answer) waiting.textContent = `Yapay zekâ yazıyor… ${Math.round((Date.now() - started) / 1000)} sn`
+                    + ' (ilk kullanımda model yüklenir)';
+            }, 1000) : null;
+            try {
+                const reader = await streamGuide({question, generate, history: guideHistory.slice(-4)});
+                for await (const event of guideEvents(reader)) {
+                    if (event.type === 'sources') {
+                        const [best, ...related] = event.items;
+                        if (!best) {
+                            body.replaceChildren(el('p', '', 'Bu konu kullanım kılavuzunda yok.'));
+                            answer = 'Bu konu kullanım kılavuzunda yok.';
+                            continue;
+                        }
+                        if (!generate) {
+                            const title = el('p', 'mb-1 text-xs font-semibold text-slate-900', best.question);
+                            const text = el('div', '');
+                            renderRich(text, best.answer);
+                            body.replaceChildren(title, text);
+                            answer = best.answer;
+                        }
+                        const shown = generate ? event.items : related;
+                        if (shown.length) {
+                            const box = el('div', 'mt-2 border-t border-slate-200 pt-2');
+                            box.appendChild(el('p', 'mb-1 text-[10px] font-semibold text-slate-500', generate ? 'Kaynak bölümler:' : 'İlgili bölümler:'));
+                            const chips = el('div', 'flex flex-wrap gap-1');
+                            for (const item of shown) {
+                                const chip = el('button', 'rounded bg-white px-1.5 py-0.5 text-left text-[10px] text-slate-600 ring-1 ring-slate-200 hover:text-blue-700 hover:ring-blue-300', item.question);
+                                chip.type = 'button';
+                                chip.addEventListener('click', () => answerFromGuide(item));
+                                chips.appendChild(chip);
+                            }
+                            box.appendChild(chips);
+                            bubble.appendChild(box);
+                        }
+                        if (!generate) explainButton(bubble, question);
+                    } else if (event.type === 'token') {
+                        answer += event.text;
+                        renderRich(body, answer);
+                        $('guide-chat').scrollTop = $('guide-chat').scrollHeight;
+                    } else if (event.type === 'error') {
+                        const note = el('p', 'mb-2 rounded bg-amber-50 px-2 py-1 text-[11px] text-amber-900',
+                            `${event.detail} Kılavuzdaki en ilgili bölüm:`);
+                        const fallback = el('div', '');
+                        renderRich(fallback, `**${event.fallback.question}**\n${event.fallback.answer}`);
+                        body.replaceChildren(note, fallback);
+                        answer = event.fallback.answer;
+                    }
+                }
+                if (!answer) body.replaceChildren(el('p', 'text-slate-500', 'Yanıt alınamadı.'));
+                guideHistory.push({role: 'user', content: question}, {role: 'assistant', content: answer});
+            } catch (err) {
+                body.replaceChildren(el('p', 'text-rose-700', err.message));
+            } finally {
+                if (ticker) clearInterval(ticker);
+                guideBusy = false;
+                $('guide-send').disabled = false;
+                $('guide-chat').scrollTop = $('guide-chat').scrollHeight;
+            }
+        }
+
+        $('guide-form').addEventListener('submit', event => {
+            event.preventDefault();
+            const question = $('guide-question').value.trim();
+            if (!question || guideBusy) return;
+            $('guide-question').value = '';
+            $('guide-question').style.height = '';
+            askGuide(question);
+        });
+        $('guide-question').addEventListener('keydown', event => {
+            if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); $('guide-form').requestSubmit(); }
+        });
+        $('guide-question').addEventListener('input', () => {
+            const box = $('guide-question');
+            box.style.height = 'auto';
+            box.style.height = `${Math.min(box.scrollHeight, 128)}px`;
+        });
+        document.querySelectorAll('.guide-toc').forEach(link => link.addEventListener('click', event => {
+            event.preventDefault();  // keep the #rehber address; just scroll
+            document.querySelector(link.getAttribute('href'))?.scrollIntoView({behavior: 'smooth', block: 'start'});
+        }));
+        document.querySelectorAll('[data-goto-view]').forEach(button =>
+            button.addEventListener('click', () => showView(button.dataset.gotoView)));
 
         // ---------- E-mail a report ----------
         let mailRuns = [];

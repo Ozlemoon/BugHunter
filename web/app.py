@@ -9,6 +9,7 @@ All work is delegated to core.engine.HuntSession.
 from __future__ import annotations
 
 import hmac
+import json
 import logging
 import threading
 import time
@@ -19,11 +20,11 @@ from urllib.parse import urlsplit
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
-from core import mailer, reporting, schedules
+from core import guide, mailer, reporting, schedules
 from core.auth import SESSION_LIFETIME, AuthError, User
 from core.config import get_settings
 from core.engine import (
@@ -516,6 +517,62 @@ def send_schedule_now(schedule_id: int, user: User = Depends(require_user)):
         raise HTTPException(status_code=502, detail=str(error)) from error
     _schedule_store().record(schedule.id, schedules._now(), None)
     return {"status": "sent", "runs": count, "schedule": _schedule_store().get(schedule.id).as_dict()}
+
+
+_guide_assistant: Optional[guide.GuideAssistant] = None
+
+
+def get_guide() -> guide.GuideAssistant:
+    global _guide_assistant
+    settings = get_settings()
+    if _guide_assistant is None or _guide_assistant.settings is not settings:
+        _guide_assistant = guide.GuideAssistant(settings)
+    return _guide_assistant
+
+
+class GuideTurn(BaseModel):
+    role: str = Field(pattern="^(user|assistant)$")
+    content: str = Field(max_length=4000)
+
+
+class GuideQuestion(BaseModel):
+    question: str = Field(min_length=1, max_length=guide.MAX_QUESTION_LENGTH)
+    history: List[GuideTurn] = Field(default_factory=list, max_length=10)
+    generate: bool = False  # True: also have the chat model write the answer (slow on a laptop CPU)
+
+
+@app.get("/api/guide")
+def guide_overview(user: User = Depends(require_user)):
+    assistant = get_guide()
+    return {"faqs": [s.as_dict() for s in assistant.faqs()], "model": assistant.chat_model,
+            "search_model": assistant.settings.rag_embed_model,
+            "sections": len(assistant.sections())}
+
+
+@app.post("/api/guide/warmup")
+def guide_warmup(user: User = Depends(require_user)):
+    """Loads the embedding model in the background when the guide opens, so the first answer is quick."""
+    threading.Thread(target=get_guide().warm_up, name="guide-warmup", daemon=True).start()
+    return {"status": "warming"}
+
+
+@app.post("/api/guide/ask")
+def guide_ask(payload: GuideQuestion, user: User = Depends(require_user)):
+    """Streams newline-delimited JSON events: sources, token..., done (or error with a guide fallback)."""
+    assistant = get_guide()
+    try:
+        events = assistant.ask(payload.question, [t.model_dump() for t in payload.history], payload.generate)
+        first = next(events)  # validation errors surface here, before the stream starts
+    except guide.GuideError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+    def stream():
+        yield json.dumps(first, ensure_ascii=False) + "\n"
+        for event in events:
+            yield json.dumps(event, ensure_ascii=False) + "\n"
+
+    return StreamingResponse(stream(), media_type="application/x-ndjson",
+                             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
 
 class RagQuestion(BaseModel):

@@ -41,7 +41,7 @@ def start(client, api_copy, **overrides):
 def test_dashboard_homepage_renders(client):
     response = client.get("/")
     assert response.status_code == 200
-    for text in ("BugHunter AI", "Test çalışma alanı", "Test rehberi", "Proje belgelerine sor", "Önceki testlerim", "tester"):
+    for text in ("BugHunter AI", "Test çalışma alanı", "Rehber asistanı", "Proje belgelerine sor", "Önceki testlerim", "tester"):
         assert text in response.text
     assert response.headers["x-frame-options"] == "DENY"
 

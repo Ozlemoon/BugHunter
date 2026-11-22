@@ -94,6 +94,8 @@ class Settings:
     rag_db: Path = PROJECT_ROOT / "run_artifacts" / "rag"
     rag_chat_model: str = "qwen3.5"
     rag_embed_model: str = "embeddinggemma"
+    # Chat model of the "Rehber asistanı"; empty = rag_chat_model.
+    guide_model: str = ""
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -126,6 +128,7 @@ class Settings:
             rag_db=_resolve(_env("RAG_DB", "run_artifacts/rag")),
             rag_chat_model=_env("RAG_CHAT_MODEL", cls.rag_chat_model),
             rag_embed_model=_env("RAG_EMBED_MODEL", cls.rag_embed_model),
+            guide_model=_env("GUIDE_MODEL", ""),
         )
 
     @property
