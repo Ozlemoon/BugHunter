@@ -262,6 +262,13 @@ def me(user: User = Depends(require_user)):
     return {"username": user.username}
 
 
+@app.get("/favicon.svg", include_in_schema=False)
+def favicon():
+    svg = templates.get_template("_logo.html").module.logo(64, "fav")
+    return Response(content=str(svg), media_type="image/svg+xml",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
 @app.get("/healthz")
 async def healthz():
     return {"status": "ok", "version": __version__}

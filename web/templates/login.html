@@ -1,30 +1,35 @@
 <!DOCTYPE html>
+{% from "_logo.html" import logo %}
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BugHunter AI — Giriş</title>
     <script src="https://cdn.tailwindcss.com/3.4.16"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <style>
         [hidden] { display: none !important; }
-        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        body { font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif; }
     </style>
 </head>
-<body class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-teal-950 text-white"
+<body class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 text-white"
       data-first-user="{{ 'true' if first_user else 'false' }}" data-allow-signup="{{ 'true' if allow_signup else 'false' }}">
     <main class="mx-auto flex min-h-screen max-w-5xl flex-col items-center justify-center gap-10 px-4 py-10 lg:flex-row lg:gap-16">
         <section class="max-w-md text-center lg:text-left">
-            <p class="text-2xl font-bold tracking-tight">BugHunter <span class="text-teal-300">AI</span></p>
-            <h1 class="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">Testlerinize kaldığınız yerden devam edin.</h1>
+            <p class="flex items-center justify-center gap-3 text-2xl font-semibold tracking-tight lg:justify-start">
+                {{ logo(48, "login") }}
+                <span>BugHunter <span class="font-normal text-blue-300">AI</span></span>
+            </p>
+            <h1 class="mt-6 text-3xl font-semibold tracking-tight sm:text-4xl">Testlerinize kaldığınız yerden devam edin.</h1>
             <p class="mt-4 text-sm leading-relaxed text-slate-300">
                 Giriş yaptıktan sonra daha önce çalıştırdığınız tüm testler <strong class="text-white">Önceki testlerim</strong>
                 bölümünde listelenir. Her testin bulgularını, hata kaynaklarını ve raporlarını yeniden açabilirsiniz.
             </p>
             <ul class="mt-6 hidden space-y-2 text-sm text-slate-300 lg:block">
-                <li class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-teal-300"></span>Testler hesabınıza kaydedilir; başkaları göremez.</li>
-                <li class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-teal-300"></span>Şifreniz yalnızca güvenli bir özet olarak saklanır.</li>
-                <li class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-teal-300"></span>Oturumunuz 7 gün açık kalır.</li>
+                <li class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-blue-300"></span>Testler hesabınıza kaydedilir; başkaları göremez.</li>
+                <li class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-blue-300"></span>Şifreniz yalnızca güvenli bir özet olarak saklanır.</li>
+                <li class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-blue-300"></span>Oturumunuz 7 gün açık kalır.</li>
             </ul>
         </section>
 
@@ -42,13 +47,13 @@
                     <label for="username" class="block text-sm font-semibold text-slate-700">Kullanıcı adı</label>
                     <input id="username" name="username" type="text" autocomplete="username" required maxlength="32"
                            autocapitalize="none" spellcheck="false"
-                           class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20">
+                           class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20">
                 </div>
                 <div>
                     <label for="password" class="block text-sm font-semibold text-slate-700">Şifre</label>
                     <div class="relative mt-1">
                         <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="256"
-                               class="w-full rounded-lg border border-slate-300 px-3 py-2.5 pr-20 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20">
+                               class="w-full rounded-lg border border-slate-300 px-3 py-2.5 pr-20 text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20">
                         <button type="button" id="toggle-password"
                                 class="absolute inset-y-0 right-0 px-3 text-xs font-semibold text-slate-500 hover:text-slate-800">Göster</button>
                     </div>
@@ -57,13 +62,13 @@
                 <div id="confirm-wrap" hidden>
                     <label for="password-confirm" class="block text-sm font-semibold text-slate-700">Şifre (tekrar)</label>
                     <input id="password-confirm" type="password" autocomplete="new-password" maxlength="256"
-                           class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20">
+                           class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20">
                 </div>
 
                 <p id="form-error" hidden role="alert" class="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700"></p>
 
                 <button type="submit" id="submit"
-                        class="w-full rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-teal-700 disabled:cursor-wait disabled:opacity-60">
+                        class="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-wait disabled:opacity-60">
                     Giriş yap
                 </button>
             </form>

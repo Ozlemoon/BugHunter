@@ -156,3 +156,14 @@ def test_run_payload_exposes_error_sources_and_advice(client, api_copy):
     html = client.get("/").text
     for text in ("Tavsiyeler ve hata kaynakları", "Hatanın kaynağı", 'id="url-hint"', 'role="radiogroup"'):
         assert text in html
+
+
+def test_sidebar_logo_and_palette(client):
+    html = client.get("/").text
+    assert '<aside class="z-30 flex flex-col' in html and 'aria-label="BugHunter logosu"' in html
+    assert "IBM Plex Sans" in html and "Hangi API" not in html
+    for green in ("teal-", "emerald-", "green-"):
+        assert green not in html
+    icon = client.get("/favicon.svg")
+    assert icon.status_code == 200 and icon.headers["content-type"].startswith("image/svg+xml")
+    assert "<svg" in icon.text
