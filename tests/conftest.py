@@ -2,7 +2,17 @@ import shutil
 
 import pytest
 
+from core import config
 from tests.helpers import PLAYGROUND
+
+
+@pytest.fixture(autouse=True)
+def ignore_local_env_file(monkeypatch):
+    """Tests must not pick up the developer's .env (real SMTP account, tokens, ports)."""
+    monkeypatch.setattr(config, "_load_dotenv", lambda path: None)
+    config.get_settings.cache_clear()
+    yield
+    config.get_settings.cache_clear()
 
 
 @pytest.fixture

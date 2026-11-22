@@ -37,6 +37,11 @@ NOT_CONFIGURED = ("E-posta gönderimi ayarlanmamış. .env dosyasına BUGHUNTER_
                   "(gerekirse BUGHUNTER_SMTP_USER ve BUGHUNTER_SMTP_PASSWORD) yazıp paneli yeniden başlatın.")
 
 
+LOGIN_REFUSED = ("E-posta sunucusu girişi kabul etmedi. Gmail kullanıyorsanız BUGHUNTER_SMTP_PASSWORD satırına "
+                 "hesap şifrenizi değil, Google hesabı → Güvenlik → Uygulama şifreleri bölümünden alınan 16 harfli "
+                 "uygulama şifresini yazın ve paneli yeniden başlatın.")
+
+
 class MailError(RuntimeError):
     """A message that can be shown to the user as is."""
 
@@ -103,6 +108,7 @@ def send(message: EmailMessage, settings: Settings) -> None:
     if not settings.mail_configured:
         raise MailError(NOT_CONFIGURED)
     timeout = 20
+    logging_in = False
     try:
         if settings.smtp_security == "ssl":
             server = smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=timeout,
@@ -113,11 +119,16 @@ def send(message: EmailMessage, settings: Settings) -> None:
             if settings.smtp_security == "starttls":
                 server.starttls(context=ssl.create_default_context())
             if settings.smtp_user:
+                logging_in = True
                 server.login(settings.smtp_user, settings.smtp_password)
+                logging_in = False
             server.send_message(message)
     except smtplib.SMTPAuthenticationError as error:
-        raise MailError("E-posta sunucusu kullanıcı adını veya şifreyi kabul etmedi. Gmail kullanıyorsanız "
-                        "normal şifre yerine bir 'uygulama şifresi' gerekir.") from error
+        raise MailError(LOGIN_REFUSED) from error
+    except smtplib.SMTPServerDisconnected as error:
+        if logging_in:  # Gmail hangs up instead of answering when given an account password
+            raise MailError(LOGIN_REFUSED) from error
+        raise MailError(f"E-posta sunucusu bağlantıyı kapattı ({settings.smtp_host}:{settings.smtp_port}).") from error
     except smtplib.SMTPRecipientsRefused as error:
         refused = ", ".join(error.recipients)
         raise MailError(f"E-posta sunucusu şu adresleri reddetti: {refused}") from error

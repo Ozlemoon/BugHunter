@@ -177,7 +177,7 @@ def test_smtp_login_failure_is_explained(session, smtp):
     client = signed_in("ayse")
     run = hunt(client)
     response = client.post(f"/api/runs/{run['run_id']}/email", json={"recipients": "ali@example.com"})
-    assert response.status_code == 502 and "uygulama şifresi" in response.json()["detail"]
+    assert response.status_code == 502 and "uygulama şifresi" in response.json()["detail"].lower()
 
 
 def test_recipient_parsing():
@@ -190,3 +190,11 @@ def test_mail_menu_item_and_view(session):
     assert 'data-view-link="mail"' in html and 'data-view="mail" hidden' in html
     for text in ("Rapor gönder", "Raporu e-postayla gönder", "Alıcılar", "Raporu görüntüle", "E-posta önizlemesi"):
         assert text in html
+
+
+def test_gmail_hanging_up_at_login_is_explained_as_a_password_problem(session, smtp):
+    smtp.fail_with = smtplib.SMTPServerDisconnected("Connection unexpectedly closed")
+    client = signed_in("ayse")
+    run = hunt(client)
+    response = client.post(f"/api/runs/{run['run_id']}/email", json={"recipients": "ali@example.com"})
+    assert response.status_code == 502 and "16 harfli" in response.json()["detail"]
