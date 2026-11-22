@@ -169,3 +169,7 @@ def test_guide_page_has_sections_assistant_and_faq_list(client):
                  'id="g-reports"', 'id="g-cli"', "Rehber asistanı", "Sık sorulan sorular", 'id="guide-faqs"',
                  'id="guide-target"', 'id="guide-criteria"'):
         assert text in html
+    assistant_view = html.split('data-view="assistant"')[1].split("</section>")[0]
+    assert 'id="guide-chat"' in assistant_view and 'id="guide-faqs"' in assistant_view  # own tab, FAQ beside it
+    guide_view = html.split('id="test-guide"')[1].split('data-view="assistant"')[0]
+    assert 'id="guide-chat"' not in guide_view and 'data-goto-view="assistant"' in guide_view
