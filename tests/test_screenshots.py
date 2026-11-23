@@ -12,7 +12,7 @@ import web.app as web_app
 from core import reporting, screenshots
 from core.config import Settings
 from core.engine import HuntConfig, HuntSession
-from core.models import TargetType, TestCase, TestCriterion
+from core.models import TargetType, TestCase, TestCriterion, TestResult
 from tests.helpers import API_BASE, PLAYGROUND, WEB_BASE, load_app
 
 PNG = b"\x89PNG\r\n\x1a\nfake-image"
@@ -42,6 +42,14 @@ def web_run(session, owner_id=None):
     return session.start(HuntConfig(target_url=f"{WEB_BASE}/", target_type=TargetType.WEB), owner_id=owner_id)
 
 
+def received(body, content_type, status=500):
+    """A TestResult as the runner leaves it: the whole body is kept in memory, not saved."""
+    result = TestResult(test_id="T", passed=False, status_code=status, response_headers={"content-type": content_type},
+                        response_body=(body or "")[:2000] or None)
+    result._full_body = body
+    return result
+
+
 def make_case(method="GET", payload=None, is_form_data=False):
     return TestCase(id="T", target_type=TargetType.WEB, criterion=TestCriterion.BOUNDARY, title="t", description="d",
                     method=method, url=f"{WEB_BASE}/x", payload=payload, is_form_data=is_form_data)
@@ -54,11 +62,11 @@ def test_only_serious_replayable_findings_are_captured(web_copy, tmp_path):
                                                 persist=False)
     finding = run.findings[0]
     assert finding.evidence.severity.value == "CRITICAL"
-    assert screenshots.worth_capturing(finding, make_case("POST", {"email": "x"}, is_form_data=True))
-    assert screenshots.worth_capturing(finding, make_case("GET"))
-    for method in ("DELETE", "PUT", "PATCH"):
-        assert not screenshots.worth_capturing(finding, make_case(method))  # never replay destructive requests
-    assert not screenshots.worth_capturing(finding, make_case("POST", {"a": 1}))  # JSON body: not a page
+    page = received("<html><body>Internal Server Error</body></html>", "text/html; charset=utf-8")
+    assert screenshots.worth_capturing(finding, make_case("POST", {"email": "x"}, is_form_data=True), page)
+    assert screenshots.worth_capturing(finding, make_case("GET"), received("Internal Server Error", "text/plain"))
+    assert not screenshots.worth_capturing(finding, make_case("GET"), received('{"a": 1}', "application/json"))
+    assert not screenshots.worth_capturing(finding, make_case("GET"), received(None, "text/html"))  # nothing received
     assert not screenshots.worth_capturing(finding, None)
     low = next(f for f in run.findings if f.evidence.severity.value == "LOW")
     assert not screenshots.worth_capturing(low, make_case("GET"))
@@ -68,7 +76,8 @@ def test_capture_respects_the_limit_and_survives_one_bad_page(web_copy, tmp_path
     run = web_session(web_copy, tmp_path).start(HuntConfig(target_url=f"{WEB_BASE}/", target_type=TargetType.WEB),
                                                 persist=False)
     tests = {t.id: t for t in run.tests}
-    serious = [f for f in run.findings if screenshots.worth_capturing(f, tests.get(f.evidence.test_id))]
+    serious = [f for f in run.findings if screenshots.worth_capturing(
+        f, tests.get(f.evidence.test_id), next(r for r in run.results if r.test_id == f.evidence.test_id))]
     assert len(serious) >= 2
 
     class FakeBrowser:
@@ -83,15 +92,16 @@ def test_capture_respects_the_limit_and_survives_one_bad_page(web_copy, tmp_path
         def __exit__(self, *exc):
             FakeBrowser.closed += 1
 
-        def capture(self, test):
+        def capture(self, test, result):
             if test.id == serious[0].evidence.test_id:
                 raise screenshots.ScreenshotError("page hung")
             return PNG
 
-    shots = screenshots.capture_findings(run.findings, tests, {}, "edge.exe", browser_factory=FakeBrowser)
+    results = {r.test_id: r for r in run.results}
+    shots = screenshots.capture_findings(run.findings, tests, results, "edge.exe", browser_factory=FakeBrowser)
     assert serious[0].evidence.test_id not in shots and serious[1].evidence.test_id in shots
     assert FakeBrowser.opened == FakeBrowser.closed == 1  # one browser for the batch, always closed
-    limited = screenshots.capture_findings(run.findings, tests, {}, "edge.exe", limit=1, browser_factory=FakeBrowser)
+    limited = screenshots.capture_findings(run.findings, tests, results, "edge.exe", limit=1, browser_factory=FakeBrowser)
     assert len(limited) <= 1
 
 
@@ -160,7 +170,11 @@ def _free_port():
 
 
 @pytest.mark.skipif(screenshots.find_browser() is None, reason="no Edge/Chrome/Chromium installed")
-def test_real_browser_captures_the_crash_and_shows_xss(web_copy):
+def test_real_browser_shows_the_received_page_cropped_to_the_problem(web_copy):
+    import struct
+
+    import httpx
+
     port = _free_port()
     server = uvicorn.Server(uvicorn.Config(load_app(web_copy), host="127.0.0.1", port=port, log_level="warning"))
     thread = threading.Thread(target=server.run, daemon=True)
@@ -171,16 +185,26 @@ def test_real_browser_captures_the_crash_and_shows_xss(web_copy):
                 break
             time.sleep(0.05)
         base = f"http://127.0.0.1:{port}"
+        probe = '"><script>bughunter_xss_probe()</script>'
         crash = TestCase(id="crash", target_type=TargetType.WEB, criterion=TestCriterion.BOUNDARY, title="t",
                          description="d", method="POST", url=f"{base}/submit-contact", is_form_data=True,
                          payload={"name": "a", "email": "no-at-sign", "message": "m"})
         xss = TestCase(id="xss", target_type=TargetType.WEB, criterion=TestCriterion.SECURITY, title="t",
-                       description="d", url=f"{base}/search", query_params={"q": '"><script>bughunter_xss_probe()</script>'})
+                       description="d", url=f"{base}/search", query_params={"q": probe})
+        crash_response = httpx.post(crash.url, data=crash.payload)
+        xss_response = httpx.get(xss.url, params=xss.query_params)
+        server.should_exit = True  # the browser must not need the site any more: nothing is re-sent
+        thread.join(timeout=10)
+
         with screenshots.open_browser(screenshots.find_browser()) as browser:
-            pages = {t.id: browser.capture(t) for t in (crash, xss)}
+            crash_png = browser.capture(crash, received(crash_response.text, crash_response.headers["content-type"]))
+            xss_png = browser.capture(xss, received(xss_response.text, xss_response.headers["content-type"], 200))
             shown = browser._call("Runtime.evaluate", returnByValue=True,
                                   expression="document.documentElement.innerText")["result"]["value"]
-        assert all(png.startswith(b"\x89PNG") and len(png) > 1000 for png in pages.values())
+        png_signature = bytes([0x89]) + b"PNG"
+        size = lambda png: struct.unpack(">II", png[16:24])
+        assert crash_png.startswith(png_signature) and xss_png.startswith(png_signature)
+        assert size(crash_png)[1] < 200 and size(xss_png)[1] < 450  # cropped, not a blank 1280x800 window
         assert "XSS: sayfaya enjekte edilen kod" in shown  # the injected script really ran
     finally:
         server.should_exit = True

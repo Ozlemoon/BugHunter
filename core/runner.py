@@ -20,6 +20,7 @@ from core.models import AssertionType, TestAssertion, TestCase, TestResult
 logger = logging.getLogger(__name__)
 
 MAX_STORED_BODY = 2000
+MAX_RENDERED_BODY = 2_000_000  # failing responses, kept in memory for screenshots
 USER_AGENT = "BugHunter-AI/1.1 (+https://github.com/Ozlemoon/BugHunter)"
 
 
@@ -98,7 +99,7 @@ class TestRunner:
             failed_assertions.append(error_message)
             logger.warning("%s %s failed: %s", test.method, test.url, error_message)
 
-        return TestResult(
+        result = TestResult(
             test_id=test.id,
             passed=not failed_assertions,
             status_code=status_code,
@@ -108,6 +109,9 @@ class TestRunner:
             failed_assertions=failed_assertions,
             error_message=error_message,
         )
+        if response_body and not result.passed:
+            result._full_body = response_body[:MAX_RENDERED_BODY]
+        return result
 
     def _evaluate_assertion(
         self,

@@ -7,7 +7,7 @@ bug evidence, and fix proposals.
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 
 class Severity(str, Enum):
@@ -140,6 +140,9 @@ class TestResult(BaseModel):
     response_headers: Dict[str, str] = Field(default_factory=dict)
     failed_assertions: List[str] = Field(default_factory=list)
     error_message: Optional[str] = None
+    # The whole response body, kept in memory during a run only (never saved): screenshots
+    # render exactly what the test received instead of sending the request again.
+    _full_body: Optional[str] = PrivateAttr(default=None)
 
 
 class BugEvidence(BaseModel):

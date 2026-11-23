@@ -2,10 +2,12 @@
 Screenshots of critical web findings, taken with a headless Chromium browser
 (Edge, Chrome or Chromium already installed on the machine; nothing is downloaded).
 
-For each CRITICAL/HIGH web finding the failing request is replayed in the
-browser — a GET page is opened, a form is filled in and submitted — and the
-page is captured as PNG. Destructive methods (DELETE, PUT, PATCH) are never
-replayed. Without a browser, screenshots are skipped and the run is unaffected.
+The request is never sent again. The browser renders the response the test
+received (with the page's own address as base, so its styles and images load)
+and only the part of the page that shows the problem is captured: around the
+XSS marker when an injected script ran, otherwise around the visible content.
+This also works for sites the browser itself refuses to open, such as
+deliberately vulnerable practice sites that Edge SmartScreen blocks.
 
 The browser is driven over the DevTools protocol and is always closed with its
 whole process tree, so no background browser keeps using memory.
@@ -15,6 +17,8 @@ from __future__ import annotations
 
 import base64
 import json
+import re
+from html import escape as html_escape
 import logging
 import os
 import shutil
@@ -37,7 +41,6 @@ logger = logging.getLogger(__name__)
 SEVERITIES = ("CRITICAL", "HIGH")
 MAX_PER_RUN = 10
 VIEWPORT = (1280, 800)
-REPLAYABLE = ("GET", "POST")
 PAGE_TIMEOUT = 15.0
 
 _CANDIDATES = {
@@ -61,16 +64,55 @@ _ON_PATH = ("msedge", "microsoft-edge", "google-chrome", "google-chrome-stable",
 # if the page executes it, a red banner makes the proof visible in the screenshot.
 XSS_MARKER = """
 window.bughunter_xss_probe = function () {
-  const show = () => {
-    const bar = document.createElement('div');
-    bar.textContent = 'XSS: sayfaya enjekte edilen kod tarayıcıda çalıştı (bughunter_xss_probe)';
-    bar.setAttribute('style', 'position:fixed;top:0;left:0;right:0;z-index:2147483647;padding:12px 16px;'
-      + 'background:#b91c1c;color:#fff;font:600 15px/1.4 system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.3)');
-    document.documentElement.appendChild(bar);
-    document.body && (document.body.style.marginTop = '52px');
-  };
-  document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', show) : show();
+  // Placed right where the page executed the injected script, so the crop shows the injection point.
+  const where = document.currentScript;
+  const bar = document.createElement('div');
+  bar.setAttribute('data-bughunter-xss', '1');
+  bar.textContent = 'XSS: sayfaya enjekte edilen kod tarayıcıda çalıştı (bughunter_xss_probe)';
+  bar.setAttribute('style', 'display:block;margin:8px 0;padding:10px 14px;border-radius:6px;background:#b91c1c;'
+    + 'color:#fff;font:600 15px/1.4 system-ui,sans-serif;text-align:left;max-width:760px');
+  if (where && where.parentNode) where.parentNode.insertBefore(bar, where.nextSibling);
+  else (document.body || document.documentElement).prepend(bar);
 };
+"""
+
+# Returns the page area worth showing, in page coordinates: around the XSS banner when the
+# injection ran, otherwise the box around the visible text and controls (capped in size).
+FOCUS_SCRIPT = """
+(() => {
+  const PAD = 16, MIN_W = 480, MIN_H = 90, MAX_H = 640;
+  const page = document.documentElement;
+  const pageW = Math.max(page.scrollWidth, innerWidth), pageH = Math.max(page.scrollHeight, innerHeight);
+  const boxes = [];
+  const add = r => { if (r.width > 0 && r.height > 0) boxes.push({l: r.left + scrollX, t: r.top + scrollY, r: r.right + scrollX, b: r.bottom + scrollY}); };
+  const bar = document.querySelector('[data-bughunter-xss]');
+  let maxH = MAX_H;
+  if (bar) {
+    const r = bar.getBoundingClientRect();
+    add({left: r.left, right: r.right, width: r.width, height: r.height + 220, top: r.top - 160, bottom: r.bottom + 60});
+    const host = bar.parentElement && bar.parentElement.getBoundingClientRect();
+    if (host && host.width < 1100) add({left: host.left, right: host.right, width: host.width, height: 1, top: r.top, bottom: r.top + 1});
+    maxH = 420;
+  } else {
+    const walker = document.createTreeWalker(document.body || page, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      if (!node.textContent.trim() || !node.parentElement || node.parentElement.closest('script,style,noscript')) continue;
+      const style = getComputedStyle(node.parentElement);
+      if (style.visibility === 'hidden' || style.display === 'none') continue;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      for (const r of range.getClientRects()) add(r);
+    }
+    document.querySelectorAll('img,input,button,textarea,select,video,canvas,svg,iframe').forEach(e => add(e.getBoundingClientRect()));
+  }
+  if (!boxes.length) return null;
+  let l = Math.min(...boxes.map(b => b.l)) - PAD, t = Math.min(...boxes.map(b => b.t)) - PAD;
+  let r = Math.max(...boxes.map(b => b.r)) + PAD, b = Math.max(...boxes.map(b => b.b)) + PAD;
+  l = Math.max(0, l); t = Math.max(0, t); r = Math.min(pageW, Math.max(r, l + MIN_W)); b = Math.min(pageH, Math.max(b, t + MIN_H));
+  if (b - t > maxH) b = t + maxH;
+  return {x: Math.floor(l), y: Math.floor(t), width: Math.ceil(r - l), height: Math.ceil(b - t)};
+})()
 """
 
 
@@ -93,24 +135,31 @@ def find_browser(configured: str = "") -> Optional[str]:
     return None
 
 
-def worth_capturing(finding: Finding, test: Optional[TestCase]) -> bool:
-    """Only serious web findings whose request can be replayed without side effects."""
+def worth_capturing(finding: Finding, test: Optional[TestCase], result=None) -> bool:
+    """Serious web findings whose response is a page the browser can show."""
     if test is None or finding.evidence.severity.value not in SEVERITIES:
         return False
     if finding.remediation is not None and not finding.remediation.noteworthy:
         return False
-    if test.method.upper() not in REPLAYABLE:
-        return False
-    if test.method.upper() == "POST" and not (test.is_form_data or test.payload is None):
-        return False  # JSON bodies are API-style requests, not something a page shows
+    if result is not None:
+        body = getattr(result, "_full_body", None)
+        kind = _content_type(getattr(result, "response_headers", {}) or {})
+        if not body or not (kind.startswith("text/") or "html" in kind or not kind):
+            return False
     return True
+
+
+def _content_type(headers: Dict[str, str]) -> str:
+    for name, value in headers.items():
+        if name.lower() == "content-type":
+            return value.split(";")[0].strip().lower()
+    return ""
 
 
 def caption_for(test: TestCase, status_code: Optional[int]) -> str:
     path = urlsplit(test.url).path or "/"
     status = f" · HTTP {status_code}" if status_code else ""
-    action = "form gönderildi" if test.method.upper() == "POST" else "sayfa açıldı"
-    return f"{test.method.upper()} {path}{status} · tarayıcıda yeniden {action}"
+    return f"{test.method.upper()} {path}{status} · testin aldığı yanıt"
 
 
 def _with_query(url: str, params: Dict) -> str:
@@ -283,26 +332,34 @@ class Browser:
             time.sleep(0.2)
 
     # -- capturing --------------------------------------------------------------------
-    def capture(self, test: TestCase) -> bytes:
-        """Replays the test's request in the browser and returns a PNG of the page."""
-        method = test.method.upper()
-        if method == "GET":
-            self._call("Page.navigate", url=_with_query(test.url, test.query_params))
-        elif method == "POST":
-            self._call("Page.navigate", url="about:blank")
-            fields = test.payload if isinstance(test.payload, dict) else {}
-            # Build and submit the same form the test sent; values are passed as JSON data, not code.
-            script = ("(() => { const f = document.createElement('form'); f.method = 'POST';"
-                      f" f.action = {json.dumps(_with_query(test.url, test.query_params))};"
-                      f" for (const [k, v] of Object.entries({json.dumps({str(k): '' if v is None else str(v) for k, v in fields.items()})}))"
-                      " { const i = document.createElement('input'); i.type = 'hidden'; i.name = k; i.value = v; f.appendChild(i); }"
-                      " document.body.appendChild(f); f.submit(); return true; })()")
-            self._call("Runtime.evaluate", expression=script, returnByValue=True)
+    def capture(self, test: TestCase, result) -> bytes:
+        """Shows the response the test received and returns a PNG of the part that matters."""
+        body = getattr(result, "_full_body", None)
+        if not body:
+            raise ScreenshotError("Testin aldığı yanıt yok; görüntü alınmadı.")
+        kind = _content_type(result.response_headers or {}) or "text/html"
+        page_url = _with_query(test.url, test.query_params)
+        if "html" in kind:
+            # Resolve the page's relative styles, images and links against its real address.
+            base = f'<base href="{html_escape(page_url, quote=True)}">'
+            match = re.search(r"<head[^>]*>", body, re.IGNORECASE)
+            body = body[:match.end()] + base + body[match.end():] if match else base + body
         else:
-            raise ScreenshotError(f"{method} istekleri tarayıcıda tekrarlanmaz.")
-        time.sleep(0.3)
+            kind = "text/plain"
+        data_url = f"data:{kind};charset=utf-8;base64," + base64.b64encode(body.encode("utf-8")).decode()
+        navigation = self._call("Page.navigate", url=data_url)
+        if navigation.get("errorText"):
+            raise ScreenshotError(f"Sayfa gösterilemedi: {navigation['errorText']}")
+        time.sleep(0.2)
         self._wait_for_load()
-        data = self._call("Page.captureScreenshot", format="png", captureBeyondViewport=False)["data"]
+        href = self._call("Runtime.evaluate", expression="location.href", returnByValue=True)["result"].get("value", "")
+        if str(href).startswith("chrome-error:"):
+            raise ScreenshotError("Tarayıcı sayfayı gösteremedi.")
+        clip = self._call("Runtime.evaluate", expression=FOCUS_SCRIPT, returnByValue=True)["result"].get("value")
+        if not clip:
+            raise ScreenshotError("Sayfada gösterilecek içerik yok.")
+        data = self._call("Page.captureScreenshot", format="png", captureBeyondViewport=True,
+                          clip={**clip, "scale": 1})["data"]
         return base64.b64decode(data)
 
 
@@ -319,7 +376,8 @@ def capture_findings(findings: List[Finding], tests: Dict[str, TestCase], result
     chosen = []
     for finding in findings:  # already ordered most severe first
         test = tests.get(finding.evidence.test_id or "")
-        if worth_capturing(finding, test) and test.id not in {t.id for t in chosen}:
+        result = results.get(test.id) if test else None
+        if worth_capturing(finding, test, result) and test.id not in {t.id for t in chosen}:
             chosen.append(test)
         if len(chosen) >= limit:
             break
@@ -329,8 +387,9 @@ def capture_findings(findings: List[Finding], tests: Dict[str, TestCase], result
     with browser_factory(executable, headers) as browser:
         for test in chosen:
             try:
-                status = getattr(results.get(test.id), "status_code", None)
-                shots[test.id] = {"png": browser.capture(test), "caption": caption_for(test, status)}
+                result = results.get(test.id)
+                shots[test.id] = {"png": browser.capture(test, result),
+                                  "caption": caption_for(test, getattr(result, "status_code", None))}
             except Exception as error:  # one page failing must not lose the others
                 logger.warning("Screenshot of %s failed: %s", test.id, error)
     return shots
