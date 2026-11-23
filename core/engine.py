@@ -38,6 +38,7 @@ from core.remediation import Recommendation, Remediation, advise, recommend
 from core.runner import TestRunner
 from core.auth import UserStore
 from core.database import Database
+from core import screenshots
 from core.storage import RunStore
 from core.targets.api_target import ApiTargetParser
 from core.targets.web_target import WebTargetParser
@@ -131,6 +132,7 @@ class Finding(BaseModel):
     remediation: Optional[Remediation] = None
     proposal: Optional[FixProposal] = None
     verification: Optional[RegressionReport] = None
+    screenshot: Optional[str] = None  # caption when a browser screenshot of this web finding is stored
 
 
 class RunSummary(BaseModel):
@@ -232,6 +234,7 @@ class HuntSession:
         store: Optional[RunStore] = None,
         client_factory: Optional[ClientFactory] = None,
         settle_seconds: Optional[float] = None,
+        screenshotter: Optional[Callable[..., Dict[str, dict]]] = None,
     ):
         self.settings = settings or get_settings()
         if store is None:
@@ -244,6 +247,7 @@ class HuntSession:
         self.patcher = CodePatcher(approval_gate=self.gate)
         self.verifier = RegressionVerifier()
         self._client_factory = client_factory
+        self._screenshotter = screenshotter
         self._settle = self.settings.patch_settle_seconds if settle_seconds is None else settle_seconds
         self._runs: Dict[str, HuntRun] = {}
         self._lock = threading.RLock()
@@ -310,8 +314,35 @@ class HuntSession:
             self._runs[run.run_id] = run
             if persist:
                 self.store.save(run, owner_id=owner_id)
+                if config.target_type == TargetType.WEB and self._attach_screenshots(run):
+                    self.store.save(run)
             logger.info("Run %s: %d tests, %d failed", run.run_id, run.summary.total_tests, run.summary.failed_tests)
             return run
+
+    def _attach_screenshots(self, run: HuntRun) -> bool:
+        """Browser screenshots of the serious web findings. Never fails the run."""
+        capture = self._screenshotter
+        if capture is None:
+            if not self.settings.screenshots_enabled:
+                return False
+            browser = screenshots.find_browser(self.settings.browser_path)
+            if browser is None:
+                logger.info("No Edge/Chrome/Chromium found; web findings get no screenshots")
+                return False
+            capture = lambda findings, tests, results, headers: screenshots.capture_findings(
+                findings, tests, results, browser, headers)
+        try:
+            shots = capture(run.findings, {t.id: t for t in run.tests}, {r.test_id: r for r in run.results},
+                            run.config.auth_headers())
+        except Exception as error:  # no browser, browser crashed ...: the findings stand without images
+            logger.warning("Screenshots skipped for run %s: %s", run.run_id, error)
+            return False
+        for finding in run.findings:
+            shot = shots.get(finding.evidence.test_id or "")
+            if shot:
+                self.store.save_screenshot(run.run_id, finding.evidence.test_id, shot["png"], shot["caption"])
+                finding.screenshot = shot["caption"]
+        return bool(shots)
 
     # ------------------------------------------------------------------
     def get_run(self, run_id: str, owner_id: Optional[int] = None) -> Optional[HuntRun]:

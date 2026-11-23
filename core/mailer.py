@@ -73,7 +73,7 @@ def system_name(url: str) -> str:
 
 
 def build_message(run: HuntRun, recipients: List[str], sender: str, report_url: str,
-                  sent_by: str, note: Optional[str] = None) -> EmailMessage:
+                  sent_by: str, note: Optional[str] = None, screenshots: Optional[dict] = None) -> EmailMessage:
     name = system_name(run.config.target_url)
     summary = run.summary
     worst = run.worst_severity()
@@ -93,7 +93,7 @@ def build_message(run: HuntRun, recipients: List[str], sender: str, report_url: 
     message.add_alternative(reporting.environment().get_template("email.html").render(**context), subtype="html")
     message.get_payload()[1].add_related(LOGO.read_bytes(), maintype="image", subtype="png", cid=logo_cid,
                                          filename="bughunter.png", disposition="inline")
-    message.add_attachment(reporting.render(run, "html").encode("utf-8"), maintype="text", subtype="html",
+    message.add_attachment(reporting.render(run, "html", screenshots).encode("utf-8"), maintype="text", subtype="html",
                            filename=f"bughunter-{run.run_id}.html")
     return message
 

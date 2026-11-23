@@ -67,6 +67,9 @@
   .rec h4 { margin: 0 0 4px; font-size: 15px; } .rec.risk-high h4 { color: var(--high); }
   .rec.risk-medium h4 { color: var(--medium); }
   .rec ul { margin: 6px 0 0; padding-left: 18px; font-size: 12px; }
+  figure.shot { margin: 10px 0 12px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+  figure.shot img { display: block; width: 100%; max-height: 420px; object-fit: cover; object-position: top; }
+  figure.shot figcaption { padding: 6px 10px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--line); }
 </style>
 </head>
 <body>
@@ -130,6 +133,12 @@
     {% if r %}<span class="priority">{{ r.priority }}</span>{% endif %}
     {% if r and not r.noteworthy %}<span class="muted"> · Muhtemelen dikkate değer değil</span>{% endif %}
     <h4 class="title">{{ r.headline if r else f.evidence.title }}</h4>
+    {% if screenshots.get(f.evidence.test_id) %}
+    <figure class="shot">
+      <img src="{{ screenshots[f.evidence.test_id] }}" alt="Hatanın tarayıcıdaki görüntüsü" loading="lazy">
+      <figcaption>Ekran görüntüsü · {{ f.screenshot }}</figcaption>
+    </figure>
+    {% endif %}
     {% if r %}
     <div class="advice">
       {% if r.source_label %}

@@ -55,6 +55,15 @@ CREATE TABLE IF NOT EXISTS email_schedules (
     created_at    TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS screenshots (
+    run_id     TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
+    test_id    TEXT NOT NULL,
+    caption    TEXT NOT NULL,
+    png        BLOB NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (run_id, test_id)
+);
+
 CREATE INDEX IF NOT EXISTS runs_by_owner ON runs(owner_id, started_at DESC);
 """
 

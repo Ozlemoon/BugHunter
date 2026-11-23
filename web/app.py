@@ -359,11 +359,22 @@ def download_report(run_id: str, fmt: str, user: User = Depends(require_user)):
     run = _load(run_id, user)
     media_type = reporting.FORMATS[names[fmt]][0]
     disposition = "inline" if fmt == "html" else "attachment"
+    shots = get_session().store.screenshots_for(run.run_id) if fmt == "html" else None
     return Response(
-        content=reporting.render(run, names[fmt]),
+        content=reporting.render(run, names[fmt], shots),
         media_type=media_type,
         headers={"Content-Disposition": f'{disposition}; filename="bughunter-{run.run_id}.{fmt}"'},
     )
+
+
+@app.get("/api/runs/{run_id}/screenshots/{test_id}.png")
+def run_screenshot(run_id: str, test_id: str, user: User = Depends(require_user)):
+    """Browser screenshot of a web finding (only for the run's owner)."""
+    _load(run_id, user)
+    png = get_session().store.screenshot(run_id, test_id)
+    if png is None:
+        raise HTTPException(status_code=404, detail="Ekran görüntüsü bulunamadı.")
+    return Response(png, media_type="image/png", headers={"Cache-Control": "private, max-age=86400"})
 
 
 @app.post("/api/runs/{run_id}/fixes/{fix_id}/approve")
@@ -430,7 +441,8 @@ def email_report(run_id: str, payload: EmailRequest, user: User = Depends(requir
     token = store.create_share(run.run_id, days=settings.share_link_days)
     report_url = f"{settings.base_url}/r/{token}"
     message = mailer.build_message(run, recipients, settings.smtp_from, report_url,
-                                   sent_by=user.username, note=payload.note)
+                                   sent_by=user.username, note=payload.note,
+                                   screenshots=store.screenshots_for(run.run_id))
     try:
         mailer.send(message, settings)
     except mailer.MailError as error:
@@ -450,7 +462,8 @@ def shared_report(token: str):
             "<h1 style='font-size:20px'>Rapor bulunamadı</h1>"
             "<p style='color:#475569'>Bu bağlantının süresi dolmuş ya da bağlantı hatalı. "
             "Raporu gönderen kişiden yeni bir bağlantı isteyin veya e-postanın ekindeki HTML dosyasını açın.</p></body>"))
-    return HTMLResponse(reporting.render(run, "html"), headers={"X-Robots-Tag": "noindex", "Referrer-Policy": "no-referrer"})
+    html = reporting.render(run, "html", get_session().store.screenshots_for(run.run_id))
+    return HTMLResponse(html, headers={"X-Robots-Tag": "noindex", "Referrer-Policy": "no-referrer"})
 
 
 class ScheduleRequest(BaseModel):

@@ -8,9 +8,10 @@ Report exporters for a HuntRun.
 
 from __future__ import annotations
 
+import base64
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
@@ -70,18 +71,23 @@ def to_junit(run: HuntRun) -> str:
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(root, encoding="unicode")
 
 
-def to_html(run: HuntRun) -> str:
+def to_html(run: HuntRun, screenshots: Optional[dict] = None) -> str:
     results = {r.test_id: r for r in run.results}
     rows = [(t, results.get(t.id)) for t in run.tests]
-    return _env.get_template("report.html").render(run=run, rows=rows)
+    images = {test_id: "data:image/png;base64," + base64.b64encode(shot["png"]).decode()
+              for test_id, shot in (screenshots or {}).items()}  # embedded: the file stays self-contained
+    return _env.get_template("report.html").render(run=run, rows=rows, screenshots=images)
 
 
-def render(run: HuntRun, fmt: str) -> str:
+def render(run: HuntRun, fmt: str, screenshots: Optional[dict] = None) -> str:
+    """`screenshots` ({test_id: {"png": bytes, ...}}) are embedded in the HTML report."""
     from core.redaction import redact_run
 
     renderers = {"json": to_json, "junit": to_junit, "html": to_html}
     if fmt not in renderers:
         raise ValueError(f"Unknown report format '{fmt}'. Use one of: {', '.join(renderers)}")
+    if fmt == "html":
+        return to_html(redact_run(run), screenshots)
     return renderers[fmt](redact_run(run))
 
 

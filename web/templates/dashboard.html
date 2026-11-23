@@ -652,6 +652,16 @@ BUGHUNTER_SMTP_FROM=adresiniz@gmail.com</pre>
                 </div>
                 <span data-field="status" class="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600"></span>
             </div>
+            <figure data-section="screenshot" hidden class="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                <a data-field="shot-link" target="_blank" rel="noopener" class="block" title="Tam boyutta aç">
+                    <img data-field="shot-img" alt="Hatanın tarayıcıdaki ekran görüntüsü" loading="lazy"
+                         class="block max-h-[280px] w-full object-cover object-top">
+                </a>
+                <figcaption class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-500">
+                    <span><strong class="text-slate-700">Ekran görüntüsü</strong> · <span data-field="shot-caption"></span></span>
+                    <span>Tam boyut için tıklayın</span>
+                </figcaption>
+            </figure>
             <section data-section="advice" class="rounded-lg border border-slate-200 bg-white p-4 text-sm">
                 <dl data-section="source" class="mb-3 grid gap-x-4 gap-y-1.5 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs sm:grid-cols-[max-content_1fr]">
                     <dt class="font-semibold text-slate-500">Hatanın kaynağı</dt>
@@ -1121,6 +1131,13 @@ BUGHUNTER_SMTP_FROM=adresiniz@gmail.com</pre>
                 field('note').textContent = advice.note ? `Not: ${advice.note}` : '';
             }
             field('request').textContent = `${ev.method} ${ev.target_url}`;
+            if (finding.screenshot && currentRun) {
+                const src = `/api/runs/${encodeURIComponent(currentRun.run_id)}/screenshots/${encodeURIComponent(ev.test_id)}.png`;
+                field('shot-img').src = src;
+                field('shot-link').href = src;
+                field('shot-caption').textContent = finding.screenshot;
+                section('screenshot').hidden = false;
+            }
             field('expected').textContent = ev.expected_behavior;
             field('actual').textContent = ev.actual_behavior;
             field('root-cause').textContent = ev.root_cause_hypothesis;

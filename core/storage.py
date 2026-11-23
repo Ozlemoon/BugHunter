@@ -121,6 +121,25 @@ class RunStore:
         with self.db.connect() as db:
             return db.execute("UPDATE runs SET owner_id = ? WHERE owner_id IS NULL", (owner_id,)).rowcount
 
+    # -- screenshots of web findings (kept out of the run JSON: lists stay fast) --
+    def save_screenshot(self, run_id: str, test_id: str, png: bytes, caption: str) -> None:
+        with self.db.connect() as db:
+            db.execute("INSERT OR REPLACE INTO screenshots (run_id, test_id, caption, png, created_at) "
+                       "VALUES (?, ?, ?, ?, ?)",
+                       (run_id, test_id, caption, png, datetime.now(timezone.utc).isoformat()))
+
+    def screenshot(self, run_id: str, test_id: str) -> Optional[bytes]:
+        with self.db.connect() as db:
+            row = db.execute("SELECT png FROM screenshots WHERE run_id = ? AND test_id = ?",
+                             (run_id, test_id)).fetchone()
+        return bytes(row["png"]) if row else None
+
+    def screenshots_for(self, run_id: str) -> dict:
+        """{test_id: {"png": bytes, "caption": str}} for one run."""
+        with self.db.connect() as db:
+            rows = db.execute("SELECT test_id, caption, png FROM screenshots WHERE run_id = ?", (run_id,)).fetchall()
+        return {r["test_id"]: {"png": bytes(r["png"]), "caption": r["caption"]} for r in rows}
+
     # -- read-only links for e-mailed reports ------------------------------
     def create_share(self, run_id: str, days: int = 30) -> str:
         """A random link token that opens this run's HTML report without logging in."""
