@@ -19,12 +19,12 @@ from typing import Any, Dict, List, Optional, Union
 from urllib.parse import urlsplit
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
-from core import guide, mailer, reporting, schedules
+from core import documents, guide, mailer, reporting, schedules
 from core.auth import SESSION_LIFETIME, AuthError, User
 from core.config import get_settings
 from core.engine import (
@@ -51,6 +51,7 @@ async def lifespan(app: FastAPI):
     scheduler = schedules.Scheduler(lambda: get_session())
     if get_settings().scheduler_enabled:
         scheduler.start()
+    get_library().sync_in_background()  # keep the built-in user guide searchable and current
     yield
     scheduler.stop()
 
@@ -595,6 +596,122 @@ def guide_ask(payload: GuideQuestion, user: User = Depends(require_user)):
     def stream():
         yield json.dumps(first, ensure_ascii=False) + "\n"
         for event in events:
+            yield json.dumps(event, ensure_ascii=False) + "\n"
+
+    return StreamingResponse(stream(), media_type="application/x-ndjson",
+                             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
+
+
+# ---------------------------------------------------------------------------
+# Project documents ("Proje belgeleri")
+# ---------------------------------------------------------------------------
+
+_library: Optional[documents.DocumentLibrary] = None
+
+
+def get_library() -> documents.DocumentLibrary:
+    global _library
+    settings = get_settings()
+    if _library is None or _library.settings is not settings or _library.db is not get_session().store.db:
+        _library = documents.DocumentLibrary(settings, get_session().store.db)
+    return _library
+
+
+def _document_or_404(document_id: int) -> documents.Document:
+    document = get_library().get(document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="Belge bulunamadı.")
+    return document
+
+
+class DocumentText(BaseModel):
+    title: str = Field(min_length=1, max_length=documents.MAX_TITLE_LENGTH)
+    content: str = Field(min_length=1, max_length=documents.MAX_DOCUMENT_BYTES)
+
+
+class DocumentQuery(BaseModel):
+    question: str = Field(min_length=1, max_length=500)
+    document_ids: List[int] = Field(default_factory=list, max_length=200)
+
+
+@app.get("/api/docs")
+def list_documents(user: User = Depends(require_user)):
+    return get_library().overview()
+
+
+@app.post("/api/docs")
+async def upload_document(file: UploadFile = File(...), user: User = Depends(require_user)):
+    data = await file.read(documents.MAX_DOCUMENT_BYTES + 1)
+    try:
+        document = get_library().add(file.filename or "", data, user.username)
+    except documents.DocumentError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return document.as_dict()
+
+
+@app.post("/api/docs/text")
+def add_text_document(payload: DocumentText, user: User = Depends(require_user)):
+    try:
+        document = get_library().add_text(payload.title, payload.content, user.username)
+    except documents.DocumentError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return document.as_dict()
+
+
+@app.get("/api/docs/{document_id}")
+def read_document(document_id: int, user: User = Depends(require_user)):
+    document = _document_or_404(document_id)
+    try:
+        content = get_library().read(document_id)
+    except documents.DocumentError as error:
+        raise HTTPException(status_code=410, detail=str(error)) from error
+    return {**document.as_dict(get_library().is_stale(document)), "content": content}
+
+
+@app.post("/api/docs/{document_id}/reindex")
+def reindex_document(document_id: int, user: User = Depends(require_user)):
+    _document_or_404(document_id)
+    try:
+        return get_library().reindex(document_id).as_dict()
+    except documents.DocumentError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+
+
+@app.delete("/api/docs/{document_id}")
+def delete_document(document_id: int, user: User = Depends(require_user)):
+    document = _document_or_404(document_id)
+    if not document.builtin and document.uploaded_by != user.username:
+        raise HTTPException(status_code=403, detail="Bir belgeyi yalnızca yükleyen kişi silebilir.")
+    try:
+        get_library().delete(document_id)
+    except documents.DocumentError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return {"status": "deleted"}
+
+
+@app.post("/api/docs/search")
+def search_documents(payload: DocumentQuery, user: User = Depends(require_user)):
+    """Meaning-based search over the library (about a second); no chat model involved."""
+    try:
+        results = get_library().search(payload.question, document_ids=payload.document_ids or None)
+    except documents.DocumentError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    return {"results": results}
+
+
+@app.post("/api/docs/ask")
+def ask_documents_ai(payload: DocumentQuery, user: User = Depends(require_user)):
+    """Streams NDJSON: sources (the passages used), then the model's cited answer (token...), done."""
+    library = get_library()
+    try:
+        passages = library.search(payload.question, top_k=documents.ANSWER_PASSAGES,
+                                  document_ids=payload.document_ids or None)
+    except documents.DocumentError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+
+    def stream():
+        yield json.dumps({"type": "sources", "items": passages}, ensure_ascii=False) + "\n"
+        for event in library.answer(payload.question, passages):
             yield json.dumps(event, ensure_ascii=False) + "\n"
 
     return StreamingResponse(stream(), media_type="application/x-ndjson",

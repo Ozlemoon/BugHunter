@@ -126,8 +126,8 @@ class DocumentIndex:
     def index_file(self, path: Path, chunk_size: int = 600, overlap: int = 100) -> int:
         if not 0 <= overlap < chunk_size:
             raise ValueError("Örtüşme sıfır veya daha büyük ve parça boyutundan küçük olmalı.")
-        if path.suffix.lower() != ".txt":
-            raise ValueError("Yalnızca TXT belgeleri desteklenir.")
+        if path.suffix.lower() not in (".txt", ".md"):
+            raise ValueError("Yalnızca TXT ve Markdown (.md) belgeleri desteklenir.")
 
         path = path.resolve()
         source = str(path)
@@ -157,17 +157,28 @@ class DocumentIndex:
             self.collection.delete(ids=sorted(stale_ids))
         return len(ids)
 
-    def search(self, question: str, top_k: int = 3) -> list[dict]:
+    def delete_source(self, source: str) -> None:
+        """Removes every passage of one document from the index."""
+        ids = self.collection.get(where={"source": source}, include=[])["ids"]
+        if ids:
+            self.collection.delete(ids=ids)
+
+    def search(self, question: str, top_k: int = 3, sources: list[str] | None = None) -> list[dict]:
+        """`sources` given: only passages of those documents (their stored paths)."""
         question = question.strip()
         if not question or top_k < 1:
             raise ValueError("Soru boş olamaz ve Top-K en az 1 olmalı.")
         count = self.collection.count()
-        if not count:
+        if not count or sources == []:
             return []
+        where = None
+        if sources:
+            where = {"source": sources[0]} if len(sources) == 1 else {"source": {"$in": list(sources)}}
         results = self.collection.query(
             query_embeddings=self.embed([question]),
             n_results=min(top_k, count),
             include=["documents", "metadatas", "distances"],
+            where=where,
         )
         rows = list(zip(results["metadatas"][0], results["documents"][0], results["distances"][0]))
         if any(metadata is None or text is None for metadata, text, _ in rows):

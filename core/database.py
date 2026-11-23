@@ -64,6 +64,19 @@ CREATE TABLE IF NOT EXISTS screenshots (
     PRIMARY KEY (run_id, test_id)
 );
 
+CREATE TABLE IF NOT EXISTS documents (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    filename    TEXT NOT NULL,
+    path        TEXT NOT NULL UNIQUE,
+    sha256      TEXT NOT NULL,
+    size        INTEGER NOT NULL,
+    chunks      INTEGER NOT NULL,
+    builtin     INTEGER NOT NULL DEFAULT 0,
+    uploaded_by TEXT,
+    created_at  TEXT NOT NULL,
+    indexed_at  TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS runs_by_owner ON runs(owner_id, started_at DESC);
 """
 

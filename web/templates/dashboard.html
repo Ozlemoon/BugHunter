@@ -494,22 +494,101 @@
         </div>
         </section>
 
-        <section data-view="docs" hidden aria-labelledby="rag-heading" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 id="rag-heading" class="text-base font-bold text-slate-900">Proje belgelerine sor</h2>
-            <form id="rag-form" class="mt-4 space-y-3">
-                <label for="rag-question" class="block text-sm font-medium text-slate-700">Sorunuz</label>
-                <textarea id="rag-question" maxlength="1000" rows="2" required
-                          placeholder="İletişim formu gönderilince ne gösterilmeli?"
-                          class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></textarea>
-                <button id="rag-submit" type="submit"
-                        class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-                    Kaynaklarda ara
-                </button>
-            </form>
-            <div aria-live="polite" class="mt-4 text-sm text-slate-700">
-                <p id="rag-answer" class="whitespace-pre-wrap"></p>
-                <ul id="rag-sources" aria-label="Kaynaklar" class="mt-2 space-y-1 font-medium"></ul>
+        <section data-view="docs" hidden aria-labelledby="rag-heading" class="space-y-6">
+            <div class="overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 px-6 py-8 text-white shadow-lg sm:px-10">
+                <div class="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">Proje belgeleri</p>
+                        <h2 id="rag-heading" class="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Gereksinimlerinizde ve test planlarınızda arayın</h2>
+                        <p class="mt-2 max-w-2xl text-sm leading-relaxed text-slate-300">Projenizin belgelerini yükleyin; bir sistemin nasıl davranması gerektiğini kelimesi kelimesine değil, anlamına göre arayın. Bulunan paragraflar kaynağıyla gösterilir.</p>
+                    </div>
+                    <div id="docs-stats" class="flex flex-wrap gap-2 text-xs font-semibold"></div>
+                </div>
+                <form id="docs-search-form" class="mt-6" novalidate>
+                    <div class="flex flex-col gap-2 rounded-xl bg-white p-2 shadow-xl sm:flex-row sm:items-center">
+                        <div class="flex min-w-0 flex-1 items-center gap-2 px-2">
+                            <svg aria-hidden="true" viewBox="0 0 24 24" class="h-5 w-5 shrink-0 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                            <input id="docs-query" type="search" maxlength="500" autocomplete="off" aria-label="Belgelerde ara"
+                                   placeholder="Örn. İletişim formu gönderilince kullanıcı ne görmeli?"
+                                   class="w-full border-0 bg-transparent py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400">
+                        </div>
+                        <select id="docs-scope" aria-label="Arama kapsamı"
+                                class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 sm:max-w-[220px]">
+                            <option value="">Tüm belgeler</option>
+                        </select>
+                        <button type="submit" id="docs-search-button"
+                                class="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60">Ara</button>
+                    </div>
+                    <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
+                        <div id="docs-examples" class="flex flex-wrap items-center gap-2 text-xs">
+                            <span class="text-slate-400">Örnekler:</span>
+                        </div>
+                        <label class="flex cursor-pointer items-center gap-2 text-xs text-slate-300" title="Yerel model bulunan paragraflardan kaynak göstererek kısa bir yanıt yazar; bu bilgisayarda birkaç dakika sürebilir.">
+                            <input id="docs-ai" type="checkbox" class="h-4 w-4 accent-blue-500">
+                            <span>Yapay zekâ ile de yanıtla <span class="text-slate-500">(yavaş)</span></span>
+                        </label>
+                    </div>
+                </form>
             </div>
+
+            <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+                <div class="min-w-0 space-y-4">
+                    <div id="docs-ai-answer" hidden class="rounded-2xl border border-blue-200 bg-blue-50/60 p-5 shadow-sm">
+                        <p class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-700">✦ Yapay zekâ yanıtı</p>
+                        <div id="docs-ai-body" class="mt-2 text-sm leading-relaxed text-slate-800"></div>
+                        <p class="mt-3 text-[11px] text-slate-500">Yanıt yalnızca aşağıdaki kaynak paragraflardan üretilir; köşeli parantezdeki numara kaynağı gösterir.</p>
+                    </div>
+                    <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-5 py-3">
+                            <h3 class="text-sm font-semibold text-slate-900">Sonuçlar</h3>
+                            <p id="docs-result-meta" class="text-xs text-slate-500"></p>
+                        </div>
+                        <ol id="docs-results" class="divide-y divide-slate-100">
+                            <li class="px-5 py-10 text-center text-sm text-slate-500">Yukarıya bir soru ya da konu yazın. Sonuçlar belgelerdeki en ilgili paragraflardır.</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <aside class="space-y-4" aria-labelledby="docs-library-heading">
+                    <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                        <div class="flex items-center justify-between gap-2">
+                            <h3 id="docs-library-heading" class="text-sm font-semibold text-slate-900">Belge kütüphanesi</h3>
+                            <button type="button" id="docs-paste-toggle" class="text-xs font-semibold text-blue-700 hover:underline">Metin yapıştır</button>
+                        </div>
+                        <label id="docs-drop" for="docs-file"
+                               class="mt-3 flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-slate-300 px-4 py-6 text-center transition hover:border-blue-400 hover:bg-blue-50/40">
+                            <svg aria-hidden="true" viewBox="0 0 24 24" class="h-7 w-7 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+                            <span class="text-sm font-semibold text-slate-800">Belge yükle</span>
+                            <span class="text-[11px] text-slate-500">Sürükleyip bırakın ya da tıklayın · .txt, .md · en fazla <span id="docs-max-kb">512</span> KB</span>
+                            <input id="docs-file" type="file" accept=".txt,.md,text/plain,text/markdown" multiple class="sr-only">
+                        </label>
+                        <form id="docs-paste-form" hidden class="mt-3 space-y-2" novalidate>
+                            <input id="docs-paste-title" type="text" maxlength="120" placeholder="Başlık, örn. İletişim formu gereksinimleri"
+                                   class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-600">
+                            <textarea id="docs-paste-content" rows="6" placeholder="Belge metnini buraya yapıştırın…"
+                                      class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-600"></textarea>
+                            <div class="flex justify-end gap-2">
+                                <button type="button" id="docs-paste-cancel" class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold hover:bg-slate-50">Vazgeç</button>
+                                <button type="submit" class="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700">Kaydet ve işle</button>
+                            </div>
+                        </form>
+                        <p id="docs-upload-status" hidden role="status" class="mt-3 rounded-lg px-3 py-2 text-xs"></p>
+                        <ul id="docs-list" class="mt-4 space-y-2"></ul>
+                    </div>
+                    <p class="px-1 text-[11px] leading-relaxed text-slate-500">Belgeler bu paneldeki tüm hesaplarla paylaşılır; bir belgeyi yalnızca yükleyen kişi silebilir. Arama ve işleme Ollama'daki yerel modelle yapılır, belgeler bilgisayarınızdan çıkmaz.</p>
+                </aside>
+            </div>
+
+            <dialog id="docs-viewer" class="w-[min(860px,calc(100vw-2rem))] rounded-2xl p-0 shadow-2xl backdrop:bg-slate-950/60">
+                <div class="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-3">
+                    <div class="min-w-0">
+                        <p id="docs-viewer-title" class="truncate text-sm font-semibold text-slate-900"></p>
+                        <p id="docs-viewer-meta" class="text-[11px] text-slate-500"></p>
+                    </div>
+                    <button type="button" id="docs-viewer-close" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold hover:bg-slate-100">Kapat</button>
+                </div>
+                <div id="docs-viewer-body" class="max-h-[70vh] overflow-y-auto whitespace-pre-wrap px-6 py-5 text-sm leading-relaxed text-slate-700"></div>
+            </dialog>
         </section>
 
         <section data-view="mail" hidden aria-labelledby="mail-heading" class="space-y-6">
@@ -1232,6 +1311,7 @@ BUGHUNTER_SMTP_FROM=adresiniz@gmail.com</pre>
             if (updateHash && location.hash !== `#${VIEW_SLUGS[view]}`) history.pushState(null, '', `#${VIEW_SLUGS[view]}`);
             if (view === 'history') loadHistory();
             if (view === 'mail') loadMailView();
+            if (view === 'docs') loadDocs();
             if (view === 'assistant') { loadGuide(); setTimeout(() => $('guide-question').focus(), 0); }
             window.scrollTo({top: 0});
         }
@@ -1767,28 +1847,272 @@ BUGHUNTER_SMTP_FROM=adresiniz@gmail.com</pre>
             try { await fetch('/api/auth/logout', {method: 'POST'}); } finally { window.location.replace('/login'); }
         });
 
-        // ---------- Document Q&A ----------
-        $('rag-form').addEventListener('submit', async (event) => {
-            event.preventDefault();
-            const question = $('rag-question').value.trim();
-            const answer = $('rag-answer');
-            const sources = $('rag-sources');
-            sources.replaceChildren();
-            if (!question) { answer.textContent = 'Bir soru yazın.'; return; }
-            $('rag-submit').disabled = true;
-            answer.textContent = 'Belgeler inceleniyor…';
+        // ---------- Project documents ----------
+        const DOC_EXAMPLES = ['Güvenlik testleri ne zaman kapatılmalı?', 'Raporu e-postayla nasıl gönderirim?',
+                              'Düzeltme onaylanınca ne olur?'];
+        let docsState = {documents: [], loaded: false};
+        const formatKb = bytes => bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(bytes < 10240 ? 1 : 0)} KB`;
+        const formatDay = iso => iso ? new Date(iso).toLocaleDateString('tr-TR', {day: 'numeric', month: 'short', year: 'numeric'}) : '';
+
+        function highlight(container, text, query) {
+            // Marks the query's words in the text; built from text nodes, never innerHTML.
+            const words = [...new Set((query.toLocaleLowerCase('tr').match(/[\p{L}\p{N}]{3,}/gu) || [])
+                .map(w => w.slice(0, Math.max(3, w.length - 2))))];
+            container.replaceChildren();
+            if (!words.length) { container.textContent = text; return; }
+            const pattern = new RegExp(`(${words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})[\\p{L}\\p{N}]*`, 'giu');
+            let last = 0;
+            for (const match of text.matchAll(pattern)) {
+                container.appendChild(document.createTextNode(text.slice(last, match.index)));
+                container.appendChild(el('mark', 'rounded bg-amber-100 px-0.5 text-slate-900', match[0]));
+                last = match.index + match[0].length;
+            }
+            container.appendChild(document.createTextNode(text.slice(last)));
+        }
+
+        function showDocsStatus(message, ok) {
+            const box = $('docs-upload-status');
+            box.textContent = message;
+            box.className = `mt-3 rounded-lg px-3 py-2 text-xs ${ok === null ? 'bg-slate-100 text-slate-700' : ok ? 'bg-blue-50 text-blue-800' : 'bg-rose-50 text-rose-700'}`;
+            box.hidden = false;
+        }
+
+        async function loadDocs() {
             try {
-                const result = await api('/api/rag/ask', {method: 'POST', body: JSON.stringify({question})});
-                answer.textContent = result.answer;
-                for (const [label, source] of Object.entries(result.sources)) {
-                    sources.appendChild(el('li', '', `[${label}] ${source.filename} · Bölüm ${source.chunk}`));
+                const data = await api('/api/docs');
+                docsState = {documents: data.documents, loaded: true};
+                $('docs-max-kb').textContent = data.limits.max_kb;
+                const stats = $('docs-stats');
+                stats.replaceChildren(
+                    el('span', 'rounded-full bg-white/10 px-3 py-1 text-slate-200', `${data.stats.documents} belge`),
+                    el('span', 'rounded-full bg-white/10 px-3 py-1 text-slate-200', `${data.stats.chunks} paragraf`));
+                renderDocs();
+                if (data.syncing) {
+                    $('docs-list').prepend(el('li', 'animate-pulse rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-800',
+                        'Kullanım kılavuzu güncelleniyor; birkaç saniye içinde aranabilir olacak…'));
+                    setTimeout(() => { if (!$('docs-list').closest('[data-view]').hidden) loadDocs(); }, 4000);
                 }
             } catch (err) {
-                answer.textContent = err.message || 'Panel sunucusuna ulaşılamadı. Tekrar deneyin.';
+                $('docs-list').replaceChildren(el('li', 'text-xs text-rose-700', err.message));
+            }
+        }
+
+        function renderDocs() {
+            const list = $('docs-list');
+            const me = $('current-user').textContent.trim();
+            list.replaceChildren();
+            const scope = $('docs-scope');
+            const chosen = scope.value;
+            scope.replaceChildren(new Option('Tüm belgeler', ''));
+            if (!docsState.documents.length) {
+                list.appendChild(el('li', 'rounded-lg bg-slate-50 px-3 py-4 text-center text-xs text-slate-500', 'Henüz belge yok. İlk belgenizi yükleyin.'));
+            }
+            for (const doc of docsState.documents) {
+                scope.appendChild(new Option(doc.filename, String(doc.id)));
+                const item = el('li', 'rounded-xl border border-slate-200 p-3');
+                const top = el('div', 'flex items-start gap-2');
+                top.appendChild(el('span', 'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-slate-100 text-[10px] font-bold uppercase text-slate-500',
+                    doc.filename.split('.').pop()));
+                const info = el('div', 'min-w-0 flex-1');
+                const name = el('p', 'flex flex-wrap items-center gap-1.5 text-sm font-semibold text-slate-900');
+                name.appendChild(el('span', 'break-all', doc.filename));
+                if (doc.builtin) name.appendChild(el('span', 'rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700', 'Yerleşik'));
+                if (doc.stale) name.appendChild(el('span', 'rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-800', 'Güncel değil'));
+                info.appendChild(name);
+                info.appendChild(el('p', 'mt-0.5 text-[11px] text-slate-500',
+                    [`${doc.chunks} paragraf`, formatKb(doc.size), doc.builtin ? 'BugHunter' : doc.uploaded_by, formatDay(doc.created_at)].filter(Boolean).join(' · ')));
+                top.appendChild(info);
+                item.appendChild(top);
+                const actions = el('div', 'mt-2 flex flex-wrap gap-1.5');
+                const action = (label, cls, handler) => {
+                    const b = el('button', `rounded-md px-2 py-1 text-[11px] font-semibold ${cls}`, label);
+                    b.type = 'button';
+                    b.addEventListener('click', async () => {
+                        b.disabled = true;
+                        try { await handler(); } catch (err) { showDocsStatus(err.message, false); } finally { b.disabled = false; }
+                    });
+                    return b;
+                };
+                actions.appendChild(action('Görüntüle', 'border border-slate-200 hover:bg-slate-50', () => openDoc(doc.id)));
+                actions.appendChild(action(doc.stale ? 'Şimdi işle' : 'Yeniden işle',
+                    doc.stale ? 'bg-amber-500 text-white hover:bg-amber-600' : 'border border-slate-200 hover:bg-slate-50', async () => {
+                        showDocsStatus(`${doc.filename} işleniyor…`, null);
+                        await api(`/api/docs/${doc.id}/reindex`, {method: 'POST'});
+                        showDocsStatus(`${doc.filename} güncellendi.`, true);
+                        await loadDocs();
+                    }));
+                if (!doc.builtin && doc.uploaded_by === me) {
+                    actions.appendChild(action('Sil', 'border border-rose-200 text-rose-700 hover:bg-rose-50', async () => {
+                        if (!confirm(`"${doc.filename}" silinsin mi?`)) return;
+                        await api(`/api/docs/${doc.id}`, {method: 'DELETE'});
+                        showDocsStatus(`${doc.filename} silindi.`, true);
+                        await loadDocs();
+                    }));
+                }
+                item.appendChild(actions);
+                list.appendChild(item);
+            }
+            if ([...scope.options].some(o => o.value === chosen)) scope.value = chosen;
+        }
+
+        async function uploadDocs(files) {
+            for (const file of files) {
+                showDocsStatus(`${file.name} yükleniyor ve işleniyor…`, null);
+                const body = new FormData();
+                body.append('file', file);
+                try {
+                    const response = await fetch('/api/docs', {method: 'POST', body});
+                    if (response.status === 401) { window.location.replace('/login'); return; }
+                    const data = await response.json().catch(() => ({}));
+                    if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : `Yüklenemedi (HTTP ${response.status}).`);
+                    showDocsStatus(`${data.filename} eklendi: ${data.chunks} paragraf aranabilir.`, true);
+                } catch (err) {
+                    showDocsStatus(`${file.name}: ${err.message}`, false);
+                }
+            }
+            $('docs-file').value = '';
+            await loadDocs();
+        }
+
+        async function openDoc(id, focus = null) {
+            const doc = await api(`/api/docs/${id}`);
+            $('docs-viewer-title').textContent = doc.filename;
+            $('docs-viewer-meta').textContent = [`${doc.chunks} paragraf`, formatKb(doc.size), doc.builtin ? 'Yerleşik belge' : `Yükleyen: ${doc.uploaded_by}`].join(' · ');
+            const body = $('docs-viewer-body');
+            body.replaceChildren();
+            let marked = null;
+            const at = focus ? doc.content.indexOf(focus.trim()) : -1;
+            if (at >= 0) {
+                marked = el('mark', 'rounded bg-amber-100 px-1 py-0.5 text-slate-900 ring-2 ring-amber-300', doc.content.slice(at, at + focus.trim().length));
+                body.append(document.createTextNode(doc.content.slice(0, at)), marked,
+                            document.createTextNode(doc.content.slice(at + focus.trim().length)));
+            } else {
+                body.textContent = doc.content;
+            }
+            $('docs-viewer').showModal();
+            body.scrollTop = 0;
+            if (marked) marked.scrollIntoView({block: 'center'});
+        }
+
+        function renderDocResults(results, query) {
+            const list = $('docs-results');
+            list.replaceChildren();
+            if (!results.length) {
+                list.appendChild(el('li', 'px-5 py-10 text-center text-sm text-slate-500',
+                    docsState.documents.length ? 'Bu aramaya uygun paragraf bulunamadı.' : 'Kütüphanede belge yok; önce bir belge yükleyin.'));
+                return;
+            }
+            const best = results[0].similarity || 1;
+            results.forEach((result, i) => {
+                const item = el('li', 'px-5 py-4');
+                const head = el('div', 'flex flex-wrap items-center justify-between gap-2');
+                const left = el('div', 'flex min-w-0 items-center gap-2');
+                left.appendChild(el('span', 'flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-900 text-[11px] font-bold text-white', String(i + 1)));
+                left.appendChild(el('span', 'truncate text-xs font-semibold text-slate-700', `${result.filename} · paragraf ${result.chunk}`));
+                head.appendChild(left);
+                const relevance = Math.round(100 * result.similarity / best);
+                const meter = el('div', 'flex items-center gap-2 text-[11px] text-slate-500');
+                const bar = el('span', 'h-1.5 w-20 overflow-hidden rounded-full bg-slate-100');
+                bar.appendChild(el('span', 'block h-full rounded-full bg-blue-600'));
+                bar.firstChild.style.width = `${relevance}%`;
+                meter.append(bar, el('span', '', i === 0 ? 'en ilgili' : `%${relevance}`));
+                head.appendChild(meter);
+                item.appendChild(head);
+                const text = el('p', 'mt-2 whitespace-pre-line text-sm leading-relaxed text-slate-700');
+                highlight(text, result.text, query);
+                item.appendChild(text);
+                const open = el('button', 'mt-2 text-[11px] font-semibold text-blue-700 hover:underline', 'Belgede göster →');
+                open.type = 'button';
+                open.addEventListener('click', () => openDoc(result.document_id, result.text).catch(err => showDocsStatus(err.message, false)));
+                item.appendChild(open);
+                list.appendChild(item);
+            });
+        }
+
+        async function runDocsSearch() {
+            const query = $('docs-query').value.trim();
+            if (!query) { $('docs-query').focus(); return; }
+            const ids = $('docs-scope').value ? [Number($('docs-scope').value)] : [];
+            const withAi = $('docs-ai').checked;
+            $('docs-search-button').disabled = true;
+            $('docs-result-meta').textContent = 'Aranıyor…';
+            const started = performance.now();
+            try {
+                const data = await api('/api/docs/search', {method: 'POST', body: JSON.stringify({question: query, document_ids: ids})});
+                renderDocResults(data.results, query);
+                $('docs-result-meta').textContent = `${data.results.length} paragraf · ${((performance.now() - started) / 1000).toFixed(1)} sn`;
+                if (withAi && data.results.length) await runDocsAnswer(query, ids);
+                else $('docs-ai-answer').hidden = true;
+            } catch (err) {
+                $('docs-result-meta').textContent = '';
+                $('docs-results').replaceChildren(el('li', 'px-5 py-6 text-sm text-rose-700', err.message));
             } finally {
-                $('rag-submit').disabled = false;
+                $('docs-search-button').disabled = false;
+            }
+        }
+
+        async function runDocsAnswer(query, ids) {
+            const box = $('docs-ai-answer'), body = $('docs-ai-body');
+            box.hidden = false;
+            const waiting = el('p', 'animate-pulse text-xs text-slate-500', 'Yerel model hazırlanıyor…');
+            body.replaceChildren(waiting);
+            const started = Date.now();
+            let answer = '';
+            const ticker = setInterval(() => {
+                if (!answer) waiting.textContent = `Yapay zekâ yazıyor… ${Math.round((Date.now() - started) / 1000)} sn (ilk kullanımda model yüklenir)`;
+            }, 1000);
+            try {
+                const response = await fetch('/api/docs/ask', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({question: query, document_ids: ids})});
+                if (!response.ok) {
+                    const data = await response.json().catch(() => ({}));
+                    throw new Error(typeof data.detail === 'string' ? data.detail : `HTTP ${response.status}`);
+                }
+                for await (const event of guideEvents(response.body.getReader())) {
+                    if (event.type === 'token') { answer += event.text; renderRich(body, answer); }
+                    else if (event.type === 'error') body.replaceChildren(el('p', 'text-amber-800', `${event.detail} Aşağıdaki paragraflar yine geçerli.`));
+                }
+                if (!answer && !body.textContent) body.textContent = 'Yanıt alınamadı.';
+            } catch (err) {
+                body.replaceChildren(el('p', 'text-rose-700', err.message));
+            } finally {
+                clearInterval(ticker);
+            }
+        }
+
+        DOC_EXAMPLES.forEach(example => {
+            const chip = el('button', 'rounded-full border border-white/15 bg-white/5 px-3 py-1 text-slate-200 hover:bg-white/10', example);
+            chip.type = 'button';
+            chip.addEventListener('click', () => { $('docs-query').value = example; runDocsSearch(); });
+            $('docs-examples').appendChild(chip);
+        });
+        $('docs-search-form').addEventListener('submit', event => { event.preventDefault(); runDocsSearch(); });
+        $('docs-file').addEventListener('change', () => uploadDocs([...$('docs-file').files]));
+        const drop = $('docs-drop');
+        ['dragenter', 'dragover'].forEach(type => drop.addEventListener(type, event => {
+            event.preventDefault(); drop.classList.add('border-blue-500', 'bg-blue-50');
+        }));
+        ['dragleave', 'drop'].forEach(type => drop.addEventListener(type, () => drop.classList.remove('border-blue-500', 'bg-blue-50')));
+        drop.addEventListener('drop', event => { event.preventDefault(); uploadDocs([...event.dataTransfer.files]); });
+        $('docs-paste-toggle').addEventListener('click', () => { $('docs-paste-form').hidden = !$('docs-paste-form').hidden; });
+        $('docs-paste-cancel').addEventListener('click', () => { $('docs-paste-form').hidden = true; });
+        $('docs-paste-form').addEventListener('submit', async event => {
+            event.preventDefault();
+            const title = $('docs-paste-title').value.trim(), content = $('docs-paste-content').value;
+            if (!title || !content.trim()) return showDocsStatus('Başlık ve metin gerekli.', false);
+            showDocsStatus('Kaydediliyor ve işleniyor…', null);
+            try {
+                const doc = await api('/api/docs/text', {method: 'POST', body: JSON.stringify({title, content})});
+                showDocsStatus(`${doc.filename} eklendi: ${doc.chunks} paragraf aranabilir.`, true);
+                $('docs-paste-title').value = ''; $('docs-paste-content').value = '';
+                $('docs-paste-form').hidden = true;
+                await loadDocs();
+            } catch (err) {
+                showDocsStatus(err.message, false);
             }
         });
+        $('docs-viewer-close').addEventListener('click', () => $('docs-viewer').close());
+        $('docs-viewer').addEventListener('click', event => { if (event.target === $('docs-viewer')) $('docs-viewer').close(); });
     })();
     </script>
 </body>
