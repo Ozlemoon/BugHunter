@@ -219,9 +219,13 @@ def cmd_scan(args: argparse.Namespace) -> int:
     if run is None:
         return EXIT_ERROR
 
-    for fmt, target in (("junit", args.junit), ("html", args.html), ("json", args.json)):
+    for fmt, target in (("junit", args.junit), ("html", args.html), ("json", args.json), ("pdf", args.pdf)):
         if target:
-            path = reporting.write(run, fmt, Path(target))
+            try:
+                path = reporting.write(run, fmt, Path(target), session.store.screenshots_for(run.run_id))
+            except reporting.PdfError as error:
+                console.print(f"[yellow]{error}[/yellow]")
+                continue
             if not args.quiet:
                 console.print(f"[dim]{fmt.upper()} rapor → {path}[/dim]")
     if not args.quiet:
@@ -265,7 +269,12 @@ def cmd_report(args: argparse.Namespace) -> int:
         return EXIT_ERROR
     extension = reporting.FORMATS[args.format][1]
     output = Path(args.output) if args.output else session.settings.reports_dir / f"{run.run_id}.{extension}"
-    console.print(f"Rapor yazıldı: {reporting.write(run, args.format, output)}")
+    try:
+        path = reporting.write(run, args.format, output, session.store.screenshots_for(run.run_id))
+    except reporting.PdfError as error:
+        console.print(f"[red]{error}[/red]")
+        return EXIT_ERROR
+    console.print(f"Rapor yazıldı: {path}")
     return EXIT_OK
 
 
@@ -282,6 +291,7 @@ def register(commands) -> None:
     scan.add_argument("--junit", help="Write JUnit XML to this path")
     scan.add_argument("--html", help="Write the HTML report to this path")
     scan.add_argument("--json", help="Write the JSON report to this path")
+    scan.add_argument("--pdf", help="Write the PDF report to this path (needs Edge/Chrome/Chromium)")
     scan.add_argument("--fail-on", default="HIGH", choices=["CRITICAL", "HIGH", "MEDIUM", "LOW", "NEVER"],
                       help="Exit 1 when a finding has at least this severity (default: HIGH)")
     scan.add_argument("--quiet", action="store_true", help="Only print errors")

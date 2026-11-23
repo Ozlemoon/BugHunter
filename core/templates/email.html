@@ -64,7 +64,7 @@
       <tr>
         <td align="center" style="padding:28px 28px 8px;">
           <a href="{{ report_url }}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:13px 28px;border-radius:9px;">Raporu görüntüle</a>
-          <p style="margin:12px 0 0;font-size:12px;color:#64748b;">Bağlantı açılmazsa ekteki <strong>bughunter-{{ run.run_id }}.html</strong> dosyasını açın.</p>
+          <p style="margin:12px 0 0;font-size:12px;color:#64748b;">Raporun tamamı ekteki <strong>{{ attachment }}</strong> dosyasındadır{% if attachment.endswith('.pdf') %}; bağlantı açılmazsa onu kullanın{% else %}; bağlantı açılmazsa onu açın{% endif %}.</p>
         </td>
       </tr>
       <tr>

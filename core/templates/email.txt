@@ -13,6 +13,6 @@ Not:
 {{ note }}
 {% endif %}
 Raporu görüntüle: {{ report_url }}
-Bağlantı açılmazsa ekteki bughunter-{{ run.run_id }}.html dosyasını açın.
+Raporun tamamı ekteki {{ attachment }} dosyasındadır.
 
 Bu rapor BugHunter AI üzerinden {{ sent_by }} tarafından gönderildi.

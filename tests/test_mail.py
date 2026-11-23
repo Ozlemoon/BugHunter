@@ -6,7 +6,7 @@ import pytest
 from starlette.testclient import TestClient
 
 import web.app as web_app
-from core import mailer
+from core import mailer, reporting
 from core.config import Settings, get_settings
 from core.engine import HuntSession
 from tests.helpers import API_BASE, load_app
@@ -39,6 +39,14 @@ class FakeSMTP:
 
     def send_message(self, message):
         FakeSMTP.sent.append(message)
+
+
+@pytest.fixture(autouse=True)
+def html_attachment(monkeypatch):
+    """These tests check the e-mail itself; PDF attachments are covered in test_pdf.py without a real browser."""
+    def no_pdf(run, shots=None, browser_path=""):
+        raise reporting.PdfError("tests: no browser")
+    monkeypatch.setattr(reporting, "render_pdf", no_pdf)
 
 
 @pytest.fixture

@@ -578,7 +578,7 @@ BUGHUNTER_SMTP_FROM=adresiniz@gmail.com</pre>
                             <div class="text-center">
                                 <a id="mail-preview-button" href="#" target="_blank" rel="noopener"
                                    class="inline-block rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-blue-700">Raporu görüntüle</a>
-                                <p class="mt-2 text-[11px] text-slate-500">HTML rapor e-postaya ek olarak da konur.</p>
+                                <p class="mt-2 text-[11px] text-slate-500">Raporun tamamı e-postaya PDF olarak eklenir.</p>
                             </div>
                         </div>
                     </div>
@@ -1000,7 +1000,7 @@ BUGHUNTER_SMTP_FROM=adresiniz@gmail.com</pre>
 
             const links = $('report-links');
             links.replaceChildren();
-            for (const [label, ext] of [['HTML rapor', 'html'], ['JUnit XML', 'xml'], ['JSON', 'json']]) {
+            for (const [label, ext] of [['HTML rapor', 'html'], ['PDF', 'pdf'], ['JUnit XML', 'xml'], ['JSON', 'json']]) {
                 const a = el('a', 'rounded-lg border border-slate-200 bg-white px-3 py-1.5 hover:bg-slate-50', label);
                 a.href = `/api/runs/${encodeURIComponent(data.run_id)}/report.${ext}`;
                 if (ext === 'html') a.target = '_blank';
@@ -1542,7 +1542,7 @@ BUGHUNTER_SMTP_FROM=adresiniz@gmail.com</pre>
                     method: 'POST',
                     body: JSON.stringify({recipients, note: $('mail-note').value.trim() || null}),
                 });
-                showMailResult(`Rapor gönderildi: ${result.recipients.join(', ')}`, true);
+                showMailResult(`Rapor ${result.attachment === 'pdf' ? 'PDF ekiyle' : 'HTML ekiyle'} gönderildi: ${result.recipients.join(', ')}`, true);
             } catch (err) {
                 showMailResult(err.message, false);
             } finally {

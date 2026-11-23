@@ -94,7 +94,7 @@ def test_history_and_report_downloads(client, api_copy):
     for ext, media in (("html", "text/html"), ("xml", "application/xml"), ("json", "application/json")):
         response = client.get(f"/api/runs/{data['run_id']}/report.{ext}")
         assert response.status_code == 200 and response.headers["content-type"].startswith(media)
-    assert client.get(f"/api/runs/{data['run_id']}/report.pdf").status_code == 404
+    assert client.get(f"/api/runs/{data['run_id']}/report.docx").status_code == 404
     assert client.get("/api/runs/20000101-000000-abcdef").status_code == 404
 
 

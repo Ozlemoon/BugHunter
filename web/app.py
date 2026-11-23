@@ -353,10 +353,17 @@ def get_run(run_id: str, user: User = Depends(require_user)):
 
 @app.get("/api/runs/{run_id}/report.{fmt}")
 def download_report(run_id: str, fmt: str, user: User = Depends(require_user)):
-    names = {"json": "json", "xml": "junit", "html": "html"}
+    names = {"json": "json", "xml": "junit", "html": "html", "pdf": "pdf"}
     if fmt not in names:
-        raise HTTPException(status_code=404, detail="Desteklenen biçimler: json, xml, html.")
+        raise HTTPException(status_code=404, detail="Desteklenen biçimler: json, xml, html, pdf.")
     run = _load(run_id, user)
+    if fmt == "pdf":
+        try:
+            pdf = reporting.render_pdf(run, get_session().store.screenshots_for(run.run_id), get_settings().browser_path)
+        except reporting.PdfError as error:
+            raise HTTPException(status_code=503, detail=str(error)) from error
+        return Response(pdf, media_type="application/pdf",
+                        headers={"Content-Disposition": f'attachment; filename="bughunter-{run.run_id}.pdf"'})
     media_type = reporting.FORMATS[names[fmt]][0]
     disposition = "inline" if fmt == "html" else "attachment"
     shots = get_session().store.screenshots_for(run.run_id) if fmt == "html" else None
@@ -440,15 +447,21 @@ def email_report(run_id: str, payload: EmailRequest, user: User = Depends(requir
     store = get_session().store
     token = store.create_share(run.run_id, days=settings.share_link_days)
     report_url = f"{settings.base_url}/r/{token}"
+    shots = store.screenshots_for(run.run_id)
+    try:
+        pdf = reporting.render_pdf(run, shots, settings.browser_path)
+    except reporting.PdfError as error:  # still send the e-mail, with the HTML report attached
+        logger.warning("Sending run %s with an HTML report: %s", run.run_id, error)
+        pdf = None
     message = mailer.build_message(run, recipients, settings.smtp_from, report_url,
-                                   sent_by=user.username, note=payload.note,
-                                   screenshots=store.screenshots_for(run.run_id))
+                                   sent_by=user.username, note=payload.note, screenshots=shots, pdf=pdf)
     try:
         mailer.send(message, settings)
     except mailer.MailError as error:
         raise HTTPException(status_code=502, detail=str(error)) from error
     logger.info("User %s e-mailed run %s to %d recipient(s)", user.username, run.run_id, len(recipients))
-    return {"status": "sent", "recipients": recipients, "report_url": report_url}
+    return {"status": "sent", "recipients": recipients, "report_url": report_url,
+            "attachment": "pdf" if pdf else "html"}
 
 
 @app.get("/r/{token}", response_class=HTMLResponse, include_in_schema=False)

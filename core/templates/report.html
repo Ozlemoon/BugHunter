@@ -68,6 +68,20 @@
   .rec.risk-medium h4 { color: var(--medium); }
   .rec ul { margin: 6px 0 0; padding-left: 18px; font-size: 12px; }
   figure.shot { margin: 10px 0 12px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+  @page { size: A4; margin: 12mm 12mm 14mm; }
+  @media print {
+    :root { --bg: #ffffff; --surface: #ffffff; --text: #0f172a; --muted: #475569; --line: #e2e8f0;
+            --pass: #1d4ed8; --pass-bg: #dbeafe; --fail: #b91c1c; --fail-bg: #fee2e2;
+            --critical: #7f1d1d; --high: #b91c1c; --medium: #b45309; --low: #475569; --code: #0f172a; }
+    body { padding: 0; font-size: 12px; }
+    main { max-width: none; }
+    .card, .tile, .rec, figure.shot, tr { break-inside: avoid; }
+    h2, h3.group { break-after: avoid; }
+    pre { white-space: pre-wrap; word-break: break-word; }
+    .table-wrap { overflow: visible; }
+    details > *:not(summary) { display: block; }
+    details summary { list-style: none; }
+  }
   figure.shot img { display: block; margin: 0 auto; max-width: 100%; height: auto; max-height: 480px; }
   figure.shot a, figure.shot > img { background: var(--bg); }
   figure.shot figcaption { padding: 6px 10px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--line); }

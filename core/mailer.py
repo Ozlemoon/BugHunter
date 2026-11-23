@@ -73,12 +73,15 @@ def system_name(url: str) -> str:
 
 
 def build_message(run: HuntRun, recipients: List[str], sender: str, report_url: str,
-                  sent_by: str, note: Optional[str] = None, screenshots: Optional[dict] = None) -> EmailMessage:
+                  sent_by: str, note: Optional[str] = None, screenshots: Optional[dict] = None,
+                  pdf: Optional[bytes] = None) -> EmailMessage:
+    """With `pdf`, the report is attached as PDF; otherwise as the self-contained HTML file."""
     name = system_name(run.config.target_url)
     summary = run.summary
     worst = run.worst_severity()
     logo_cid = make_msgid(domain="bughunter.local")
-    context = dict(run=run, name=name, summary=summary, report_url=report_url, sent_by=sent_by,
+    attachment = f"bughunter-{run.run_id}.{'pdf' if pdf else 'html'}"
+    context = dict(run=run, name=name, summary=summary, report_url=report_url, sent_by=sent_by, attachment=attachment,
                    note=(note or "").strip()[:MAX_NOTE_LENGTH], worst=worst.value if worst else None,
                    logo_src=f"cid:{logo_cid[1:-1]}")
 
@@ -93,8 +96,11 @@ def build_message(run: HuntRun, recipients: List[str], sender: str, report_url: 
     message.add_alternative(reporting.environment().get_template("email.html").render(**context), subtype="html")
     message.get_payload()[1].add_related(LOGO.read_bytes(), maintype="image", subtype="png", cid=logo_cid,
                                          filename="bughunter.png", disposition="inline")
-    message.add_attachment(reporting.render(run, "html", screenshots).encode("utf-8"), maintype="text", subtype="html",
-                           filename=f"bughunter-{run.run_id}.html")
+    if pdf:
+        message.add_attachment(pdf, maintype="application", subtype="pdf", filename=attachment)
+    else:
+        message.add_attachment(reporting.render(run, "html", screenshots).encode("utf-8"), maintype="text",
+                               subtype="html", filename=attachment)
     return message
 
 

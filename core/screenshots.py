@@ -363,6 +363,26 @@ class Browser:
         return base64.b64decode(data)
 
 
+    def print_pdf(self, html: str, footer: str = "BugHunter test raporu") -> bytes:
+        """Prints an HTML document to an A4 PDF with page numbers in the footer."""
+        page = Path(self._profile) / "report.html"  # inside the temporary profile: removed on close
+        page.write_text(html, encoding="utf-8")
+        navigation = self._call("Page.navigate", url=page.as_uri())
+        if navigation.get("errorText"):
+            raise ScreenshotError(f"Rapor açılamadı: {navigation['errorText']}")
+        time.sleep(0.2)
+        self._wait_for_load()
+        # Paper cannot be clicked: print collapsed sections (evidence script, technical details) open.
+        self._call("Runtime.evaluate", expression="document.querySelectorAll('details').forEach(d => d.open = true)")
+        footer_html = ('<div style="width:100%;padding:0 14mm;font:8px system-ui,sans-serif;color:#64748b;'
+                       'display:flex;justify-content:space-between"><span>' + html_escape(footer) + '</span>'
+                       '<span>sayfa <span class="pageNumber"></span> / <span class="totalPages"></span></span></div>')
+        data = self._call("Page.printToPDF", timeout=90, printBackground=True, preferCSSPageSize=True,
+                          displayHeaderFooter=True, headerTemplate="<span></span>", footerTemplate=footer_html,
+                          marginTop=0.5, marginBottom=0.6, marginLeft=0.5, marginRight=0.5)["data"]
+        return base64.b64decode(data)
+
+
 @contextmanager
 def open_browser(executable: str, headers: Optional[Dict[str, str]] = None) -> Iterator[Browser]:
     with Browser(executable, headers) as browser:

@@ -30,7 +30,27 @@ FORMATS = {
     "json": ("application/json", "json"),
     "junit": ("application/xml", "xml"),
     "html": ("text/html; charset=utf-8", "html"),
+    "pdf": ("application/pdf", "pdf"),
 }
+
+
+class PdfError(RuntimeError):
+    """A message that can be shown to the user as is."""
+
+
+def render_pdf(run: HuntRun, screenshots: Optional[dict] = None, browser_path: str = "") -> bytes:
+    """The HTML report printed to PDF by an installed Edge/Chrome/Chromium (nothing to install)."""
+    from core import screenshots as browser_tools
+
+    executable = browser_tools.find_browser(browser_path)
+    if executable is None:
+        raise PdfError("PDF için Edge, Chrome veya Chromium bulunamadı; HTML rapor kullanılabilir.")
+    html = render(run, "html", screenshots)
+    try:
+        with browser_tools.open_browser(executable) as browser:
+            return browser.print_pdf(html, footer=f"BugHunter test raporu · {run.run_id}")
+    except Exception as error:  # browser could not start, timed out ...
+        raise PdfError(f"PDF oluşturulamadı: {error}") from error
 
 
 def to_json(run: HuntRun) -> str:
@@ -84,6 +104,8 @@ def render(run: HuntRun, fmt: str, screenshots: Optional[dict] = None) -> str:
     from core.redaction import redact_run
 
     renderers = {"json": to_json, "junit": to_junit, "html": to_html}
+    if fmt == "pdf":
+        raise ValueError("PDF is binary: use render_pdf().")
     if fmt not in renderers:
         raise ValueError(f"Unknown report format '{fmt}'. Use one of: {', '.join(renderers)}")
     if fmt == "html":
@@ -91,8 +113,11 @@ def render(run: HuntRun, fmt: str, screenshots: Optional[dict] = None) -> str:
     return renderers[fmt](redact_run(run))
 
 
-def write(run: HuntRun, fmt: str, path: Path) -> Path:
+def write(run: HuntRun, fmt: str, path: Path, screenshots: Optional[dict] = None) -> Path:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(render(run, fmt), encoding="utf-8")
+    if fmt == "pdf":
+        path.write_bytes(render_pdf(run, screenshots))
+    else:
+        path.write_text(render(run, fmt, screenshots), encoding="utf-8")
     return path
