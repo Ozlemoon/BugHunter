@@ -7,7 +7,8 @@ Tarih: {{ run.started_at.strftime("%d.%m.%Y %H:%M") }} UTC
 Toplam test: {{ summary.total_tests }}
 Başarılı:    {{ summary.passed_tests }}
 Başarısız:   {{ summary.failed_tests }}
-{% if worst %}En yüksek önem derecesi: {{ worst }}
+{% if change %}Önceki teste göre: {{ change.counts.new }} yeni, {{ change.counts.fixed }} düzelen, {{ change.counts.persisting }} devam eden hata
+{% endif %}{% if worst %}En yüksek önem derecesi: {{ worst }}
 {% endif %}{% if note %}
 Not:
 {{ note }}

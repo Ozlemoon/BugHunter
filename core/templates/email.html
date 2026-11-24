@@ -49,6 +49,12 @@
               </td>
             </tr>
           </table>
+          {% if change %}
+          <p style="margin:12px 4px 0;font-size:13px;color:#475569;">Önceki teste göre:
+            <strong style="color:#b91c1c;">{{ change.counts.new }} yeni</strong> ·
+            <strong style="color:#1d4ed8;">{{ change.counts.fixed }} düzelen</strong> ·
+            <strong style="color:#334155;">{{ change.counts.persisting }} devam eden</strong> hata</p>
+          {% endif %}
           {% if worst %}
           <p style="margin:12px 4px 0;font-size:13px;color:#475569;">En yüksek önem derecesi: <strong style="color:{{ '#b91c1c' if worst in ('CRITICAL', 'HIGH') else '#b45309' if worst == 'MEDIUM' else '#475569' }};">{{ worst }}</strong></p>
           {% endif %}

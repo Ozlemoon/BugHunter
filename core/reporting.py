@@ -38,14 +38,15 @@ class PdfError(RuntimeError):
     """A message that can be shown to the user as is."""
 
 
-def render_pdf(run: HuntRun, screenshots: Optional[dict] = None, browser_path: str = "") -> bytes:
+def render_pdf(run: HuntRun, screenshots: Optional[dict] = None, browser_path: str = "",
+               comparison: Optional[dict] = None) -> bytes:
     """The HTML report printed to PDF by an installed Edge/Chrome/Chromium (nothing to install)."""
     from core import screenshots as browser_tools
 
     executable = browser_tools.find_browser(browser_path)
     if executable is None:
         raise PdfError("PDF için Edge, Chrome veya Chromium bulunamadı; HTML rapor kullanılabilir.")
-    html = render(run, "html", screenshots)
+    html = render(run, "html", screenshots, comparison=comparison)
     try:
         with browser_tools.open_browser(executable) as browser:
             return browser.print_pdf(html, footer=f"BugHunter test raporu · {run.run_id}")
@@ -91,16 +92,19 @@ def to_junit(run: HuntRun) -> str:
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(root, encoding="unicode")
 
 
-def to_html(run: HuntRun, screenshots: Optional[dict] = None) -> str:
+def to_html(run: HuntRun, screenshots: Optional[dict] = None, comparison: Optional[dict] = None) -> str:
     results = {r.test_id: r for r in run.results}
     rows = [(t, results.get(t.id)) for t in run.tests]
     images = {test_id: "data:image/png;base64," + base64.b64encode(shot["png"]).decode()
               for test_id, shot in (screenshots or {}).items()}  # embedded: the file stays self-contained
-    return _env.get_template("report.html").render(run=run, rows=rows, screenshots=images)
+    from core.comparison import VERDICT_TEXT
+
+    return _env.get_template("report.html").render(run=run, rows=rows, screenshots=images,
+                                                   comparison=comparison, verdict_text=VERDICT_TEXT)
 
 
-def render(run: HuntRun, fmt: str, screenshots: Optional[dict] = None) -> str:
-    """`screenshots` ({test_id: {"png": bytes, ...}}) are embedded in the HTML report."""
+def render(run: HuntRun, fmt: str, screenshots: Optional[dict] = None, comparison: Optional[dict] = None) -> str:
+    """`screenshots` ({test_id: {"png": bytes, ...}}) and `comparison` (core.comparison) go into the HTML report."""
     from core.redaction import redact_run
 
     renderers = {"json": to_json, "junit": to_junit, "html": to_html}
@@ -109,7 +113,7 @@ def render(run: HuntRun, fmt: str, screenshots: Optional[dict] = None) -> str:
     if fmt not in renderers:
         raise ValueError(f"Unknown report format '{fmt}'. Use one of: {', '.join(renderers)}")
     if fmt == "html":
-        return to_html(redact_run(run), screenshots)
+        return to_html(redact_run(run), screenshots, comparison)
     return renderers[fmt](redact_run(run))
 
 

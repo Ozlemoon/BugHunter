@@ -67,6 +67,13 @@
   .rec h4 { margin: 0 0 4px; font-size: 15px; } .rec.risk-high h4 { color: var(--high); }
   .rec.risk-medium h4 { color: var(--medium); }
   .rec ul { margin: 6px 0 0; padding-left: 18px; font-size: 12px; }
+  .cmp-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 10px 0; }
+  .cmp-tile { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; background: var(--surface); }
+  .cmp-tile b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+  .cmp-new { border-left: 4px solid var(--high); } .cmp-new b { color: var(--high); }
+  .cmp-fixed { border-left: 4px solid var(--pass); } .cmp-fixed b { color: var(--pass); }
+  .cmp-list { margin: 4px 0 12px; padding-left: 18px; font-size: 13px; }
+  .cmp-list li { margin: 2px 0; } .cmp-list code { font-size: 11px; color: var(--muted); }
   figure.shot { margin: 10px 0 12px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
   @page { size: A4; margin: 12mm 12mm 14mm; }
   @media print {
@@ -115,6 +122,31 @@
     <div class="tile"><span class="muted">Başarısız</span><b>{{ run.summary.failed_tests }}</b></div>
     <div class="tile"><span class="muted">Otomatik düzeltilebilir</span><b>{{ run.summary.fixable_findings }}</b></div>
   </div>
+
+  {% if comparison and comparison.previous %}
+  {% set c = comparison.counts %}
+  {% set sev_tr = {"CRITICAL": "KRİTİK", "HIGH": "YÜKSEK", "MEDIUM": "ORTA", "LOW": "DÜŞÜK"} %}
+  <h2>Önceki teste göre değişim</h2>
+  <p class="muted">{{ verdict_text[comparison.verdict] }} Karşılaştırılan test:
+    <code>{{ comparison.previous.run_id }}</code> ({{ comparison.previous.started_at[:16].replace("T", " ") }} UTC).</p>
+  <div class="cmp-tiles">
+    <div class="cmp-tile cmp-new"><span class="muted">Yeni çıkan</span><b>{{ c.new }}</b></div>
+    <div class="cmp-tile cmp-fixed"><span class="muted">Düzelen</span><b>{{ c.fixed }}</b></div>
+    <div class="cmp-tile"><span class="muted">Devam eden</span><b>{{ c.persisting }}</b></div>
+    {% if c.not_retested %}<div class="cmp-tile"><span class="muted">Bu sefer test edilmedi</span><b>{{ c.not_retested }}</b></div>{% endif %}
+  </div>
+  {% for key, label in [("new", "Yeni çıkan hatalar"), ("fixed", "Düzelen hatalar")] %}
+  {% if comparison[key] %}
+  <strong>{{ label }}</strong>
+  <ul class="cmp-list">
+    {% for item in comparison[key][:15] %}
+    <li><span class="sev sev-{{ item.severity }}">{{ sev_tr[item.severity] }}</span> {{ item.title }}{% if item.location %} · <code>{{ item.location }}</code>{% endif %}</li>
+    {% endfor %}
+    {% if comparison[key]|length > 15 %}<li class="muted">… ve {{ comparison[key]|length - 15 }} tane daha</li>{% endif %}
+  </ul>
+  {% endif %}
+  {% endfor %}
+  {% endif %}
 
   {% set rec_css = {"CRITICAL": "risk-high", "HIGH": "risk-high", "MEDIUM": "risk-medium", "LOW": "risk-low"} %}
   {% if run.recommendations %}

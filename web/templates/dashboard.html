@@ -212,6 +212,17 @@
                 </div>
             </div>
 
+            <div id="compare-panel" hidden class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 bg-slate-50 px-6 py-4">
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900">Önceki teste göre değişim</h3>
+                        <p id="compare-meta" class="text-xs text-slate-500"></p>
+                    </div>
+                    <span id="compare-verdict" class="rounded-full px-2.5 py-0.5 text-xs font-semibold"></span>
+                </div>
+                <div id="compare-body" class="space-y-4 px-6 py-4"></div>
+            </div>
+
             <div id="advice-panel" hidden class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                 <div class="border-b border-slate-200 bg-slate-50 px-6 py-4">
                     <h3 class="text-base font-bold text-slate-900">Tavsiyeler ve hata kaynakları</h3>
@@ -1064,7 +1075,7 @@ BUGHUNTER_SMTP_FROM=adresiniz@gmail.com</pre>
         });
 
         // ---------- Results ----------
-        function renderRun(data) {
+        function renderRun(data, {base = null} = {}) {
             currentRun = data;
             $('results-section').hidden = false;
             $('run-meta').textContent = `${data.run_id} · ${data.summary.target_type} · ${data.config.target_url}`;
@@ -1098,9 +1109,97 @@ BUGHUNTER_SMTP_FROM=adresiniz@gmail.com</pre>
                     'Seçilen kriterlere göre hiçbir hata tespit edilmedi.'));
             }
             renderFindingGroups(container, data.findings);
+            loadComparison(data.run_id, base);
             renderAdvice(data.recommendations || []);
             renderTable();
             $('results-section').scrollIntoView({behavior: 'smooth', block: 'start'});
+        }
+
+        // ---------- Comparison with the previous test ----------
+        const VERDICT = {
+            first: ['İlk test', 'bg-slate-100 text-slate-700', 'Bu sistemin ilk testi; bir sonraki testte neyin değiştiği burada görünecek.'],
+            worse: ['Kötüleşti', 'bg-rose-100 text-rose-800', 'Yeni hatalar çıktı: son değişiklikler bir şeyi bozmuş olabilir.'],
+            mixed: ['Karışık', 'bg-amber-100 text-amber-800', 'Bazı hatalar düzeldi, ama yenileri de çıktı.'],
+            better: ['İyileşti', 'bg-blue-100 text-blue-800', 'Yeni hata yok ve bazı hatalar düzeldi.'],
+            same: ['Değişmedi', 'bg-slate-100 text-slate-700', 'Yeni hata da düzelen hata da yok.'],
+        };
+        const COMPARE_GROUPS = [
+            ['new', 'Yeni çıkan', 'border-rose-200 bg-rose-50', 'text-rose-700', 'Önceki testte yoktu, şimdi var.'],
+            ['fixed', 'Düzelen', 'border-blue-200 bg-blue-50', 'text-blue-700', 'Önceki testte vardı, aynı test artık geçiyor.'],
+            ['persisting', 'Devam eden', 'border-slate-200 bg-white', 'text-slate-800', 'İki testte de var; hâlâ çözülmedi.'],
+            ['not_retested', 'Test edilmedi', 'border-slate-200 bg-white', 'text-slate-500', 'Önceki testte vardı ama bu sefer o kontrol çalıştırılmadı (farklı kriter seçimi).'],
+        ];
+        let compareRequest = 0;
+
+        async function loadComparison(runId, base = null) {
+            const mine = ++compareRequest;  // a newer run on screen wins over a slow answer
+            $('compare-panel').hidden = true;
+            try {
+                const query = base ? `?base=${encodeURIComponent(base)}` : '';
+                const diff = await api(`/api/runs/${encodeURIComponent(runId)}/compare${query}`);
+                if (mine === compareRequest) renderComparison(diff);
+            } catch (err) {
+                if (mine === compareRequest) $('compare-panel').hidden = true;
+            }
+        }
+
+        function renderComparison(diff) {
+            const body = $('compare-body');
+            const [label, tone, text] = VERDICT[diff.verdict] || VERDICT.same;
+            $('compare-panel').hidden = false;
+            $('compare-verdict').className = `rounded-full px-2.5 py-0.5 text-xs font-semibold ${tone}`;
+            $('compare-verdict').textContent = label;
+            body.replaceChildren();
+            if (!diff.previous) {
+                $('compare-meta').textContent = 'Aynı adresin önceki testi bulunamadı.';
+                body.appendChild(el('p', 'text-sm text-slate-600', text));
+                return;
+            }
+            const when = iso => new Date(iso).toLocaleString('tr-TR', {dateStyle: 'medium', timeStyle: 'short'});
+            $('compare-meta').textContent = `${when(diff.previous.started_at)} → ${when(diff.current.started_at)} · `
+                + `başarısız test ${diff.previous.failed_tests} → ${diff.current.failed_tests}`;
+            const summary = el('p', 'text-sm text-slate-700', text);
+            if (diff.new_serious) {
+                summary.appendChild(el('strong', 'ml-1 text-rose-700', `Yeni hataların ${diff.new_serious} tanesi yüksek/kritik riskli.`));
+            }
+            body.appendChild(summary);
+
+            const tiles = el('div', 'grid grid-cols-2 gap-3 md:grid-cols-4');
+            for (const [key, name, box, color, hint] of COMPARE_GROUPS) {
+                if (key === 'not_retested' && !diff.counts[key]) continue;
+                const tile = el('div', `rounded-lg border p-3 ${box}`);
+                tile.title = hint;
+                tile.appendChild(el('span', `text-xs font-semibold uppercase ${color}`, name));
+                tile.appendChild(el('p', `mt-1 text-2xl font-bold tabular-nums ${color}`, String(diff.counts[key])));
+                tiles.appendChild(tile);
+            }
+            body.appendChild(tiles);
+
+            for (const [key, name, , color, hint] of COMPARE_GROUPS) {
+                const items = diff[key];
+                if (!items.length) continue;
+                const details = el('details', 'rounded-lg border border-slate-200');
+                details.open = key === 'new';
+                const row0 = el('summary', 'flex cursor-pointer flex-wrap items-center justify-between gap-2 px-4 py-2 text-sm font-semibold');
+                row0.appendChild(el('span', color, `${name} hatalar (${items.length})`));
+                row0.appendChild(el('span', 'text-xs font-normal text-slate-500', hint));
+                details.appendChild(row0);
+                const list = el('ul', 'divide-y divide-slate-100 border-t border-slate-200');
+                for (const item of items) {
+                    const row = el('li', 'flex flex-wrap items-center gap-2 px-4 py-2 text-xs');
+                    row.appendChild(el('span', `rounded px-1.5 py-0.5 text-[10px] font-bold ${SEVERITY_BADGE[item.severity] || ''}`,
+                        SEVERITY_LABEL[item.severity] || item.severity));
+                    if (item.previous_severity) {
+                        row.appendChild(el('span', 'text-[10px] text-slate-500',
+                            `önceden ${SEVERITY_LABEL[item.previous_severity] || item.previous_severity}`));
+                    }
+                    row.appendChild(el('span', 'font-semibold text-slate-800', item.title));
+                    if (item.location) row.appendChild(el('code', 'break-all text-[11px] text-slate-500', item.location));
+                    list.appendChild(row);
+                }
+                details.appendChild(list);
+                body.appendChild(details);
+            }
         }
 
         function renderAdvice(recommendations) {
@@ -1788,9 +1887,52 @@ BUGHUNTER_SMTP_FROM=adresiniz@gmail.com</pre>
                 const inner = el('ul', 'mb-2 ml-6 divide-y divide-slate-100 border-l border-slate-200 pl-4');
                 for (const run of runs) inner.appendChild(historyRunItem(run));
                 details.appendChild(inner);
+                if (runs.length > 1) details.appendChild(historyCompareForm(runs));
                 item.appendChild(details);
                 list.appendChild(item);
             }
+        }
+
+        function historyCompareForm(runs) {
+            // Pick any two tests of the site; the newer one opens with the difference on top.
+            const form = el('form', 'mb-3 ml-6 flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs');
+            const label = run => new Date(run.started_at).toLocaleString('tr-TR', {dateStyle: 'short', timeStyle: 'short'})
+                + ` · ${run.target_type} · ${run.failed_tests} başarısız`;
+            const picker = (title, selected) => {
+                const wrap = el('label', 'flex flex-col gap-1 font-semibold text-slate-600', title);
+                const select = el('select', 'rounded-lg border border-slate-300 bg-white px-2 py-1.5 font-normal text-slate-800');
+                runs.forEach((run, index) => {
+                    const option = el('option', '', label(run));
+                    option.value = run.run_id;
+                    option.selected = index === selected;
+                    select.appendChild(option);
+                });
+                wrap.appendChild(select);
+                return [wrap, select];
+            };
+            const [oldWrap, oldSelect] = picker('Eski test', 1);
+            const [newWrap, newSelect] = picker('Yeni test', 0);
+            const button = el('button', 'rounded-lg bg-blue-600 px-3 py-1.5 font-semibold text-white hover:bg-blue-700', 'Karşılaştır');
+            button.type = 'submit';
+            const status = el('span', 'text-rose-700');
+            form.append(el('span', 'w-full font-semibold text-slate-800', 'İki testi karşılaştır'), oldWrap, newWrap, button, status);
+            form.addEventListener('submit', async event => {
+                event.preventDefault();
+                status.textContent = '';
+                if (oldSelect.value === newSelect.value) {
+                    status.textContent = 'İki farklı test seçin.';
+                    return;
+                }
+                const byId = Object.fromEntries(runs.map(run => [run.run_id, run]));
+                let [older, newer] = [byId[oldSelect.value], byId[newSelect.value]];
+                if (new Date(older.started_at) > new Date(newer.started_at)) [older, newer] = [newer, older];
+                try {
+                    const data = await api(`/api/runs/${encodeURIComponent(newer.run_id)}`);
+                    showView('tests');
+                    renderRun(data, {base: older.run_id});
+                } catch (err) { status.textContent = err.message; }
+            });
+            return form;
         }
 
         function historyRunItem(run) {

@@ -24,7 +24,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
-from core import documents, guide, mailer, reporting, schedules
+from core import comparison, documents, guide, mailer, reporting, schedules
 from core.auth import SESSION_LIFETIME, AuthError, User
 from core.config import get_settings
 from core.engine import (
@@ -352,15 +352,36 @@ def get_run(run_id: str, user: User = Depends(require_user)):
     return run_payload(_load(run_id, user))
 
 
+def _comparison(run: HuntRun, user: User, base: Optional[str] = None) -> dict:
+    """`base` given → compare with that run of the user; otherwise with the previous test of the same target."""
+    if base:
+        previous = _load(base, user)
+        if previous.run_id == run.run_id:
+            raise HTTPException(status_code=422, detail="Bir test kendisiyle karşılaştırılamaz.")
+        if previous.started_at > run.started_at:  # always "older → newer"
+            run, previous = previous, run
+    else:
+        previous = get_session().store.previous_run(run, owner_id=user.id)
+    return comparison.compare(run, previous)
+
+
+@app.get("/api/runs/{run_id}/compare")
+def compare_runs(run_id: str, base: Optional[str] = None, user: User = Depends(require_user)):
+    """What changed since the previous test of the same system: new, fixed and persisting bugs."""
+    return _comparison(_load(run_id, user), user, base)
+
+
 @app.get("/api/runs/{run_id}/report.{fmt}")
 def download_report(run_id: str, fmt: str, user: User = Depends(require_user)):
     names = {"json": "json", "xml": "junit", "html": "html", "pdf": "pdf"}
     if fmt not in names:
         raise HTTPException(status_code=404, detail="Desteklenen biçimler: json, xml, html, pdf.")
     run = _load(run_id, user)
+    diff = _comparison(run, user) if fmt in ("html", "pdf") else None
     if fmt == "pdf":
         try:
-            pdf = reporting.render_pdf(run, get_session().store.screenshots_for(run.run_id), get_settings().browser_path)
+            pdf = reporting.render_pdf(run, get_session().store.screenshots_for(run.run_id), get_settings().browser_path,
+                                       comparison=diff)
         except reporting.PdfError as error:
             raise HTTPException(status_code=503, detail=str(error)) from error
         return Response(pdf, media_type="application/pdf",
@@ -369,7 +390,7 @@ def download_report(run_id: str, fmt: str, user: User = Depends(require_user)):
     disposition = "inline" if fmt == "html" else "attachment"
     shots = get_session().store.screenshots_for(run.run_id) if fmt == "html" else None
     return Response(
-        content=reporting.render(run, names[fmt], shots),
+        content=reporting.render(run, names[fmt], shots, comparison=diff),
         media_type=media_type,
         headers={"Content-Disposition": f'{disposition}; filename="bughunter-{run.run_id}.{fmt}"'},
     )
@@ -449,13 +470,15 @@ def email_report(run_id: str, payload: EmailRequest, user: User = Depends(requir
     token = store.create_share(run.run_id, days=settings.share_link_days)
     report_url = f"{settings.base_url}/r/{token}"
     shots = store.screenshots_for(run.run_id)
+    diff = _comparison(run, user)
     try:
-        pdf = reporting.render_pdf(run, shots, settings.browser_path)
+        pdf = reporting.render_pdf(run, shots, settings.browser_path, comparison=diff)
     except reporting.PdfError as error:  # still send the e-mail, with the HTML report attached
         logger.warning("Sending run %s with an HTML report: %s", run.run_id, error)
         pdf = None
     message = mailer.build_message(run, recipients, settings.smtp_from, report_url,
-                                   sent_by=user.username, note=payload.note, screenshots=shots, pdf=pdf)
+                                   sent_by=user.username, note=payload.note, screenshots=shots, pdf=pdf,
+                                   comparison=diff)
     try:
         mailer.send(message, settings)
     except mailer.MailError as error:
@@ -476,7 +499,9 @@ def shared_report(token: str):
             "<h1 style='font-size:20px'>Rapor bulunamadı</h1>"
             "<p style='color:#475569'>Bu bağlantının süresi dolmuş ya da bağlantı hatalı. "
             "Raporu gönderen kişiden yeni bir bağlantı isteyin veya e-postanın ekindeki HTML dosyasını açın.</p></body>"))
-    html = reporting.render(run, "html", get_session().store.screenshots_for(run.run_id))
+    store = get_session().store
+    diff = comparison.compare(run, store.previous_run(run, owner_id=store.owner_of(run.run_id)))
+    html = reporting.render(run, "html", store.screenshots_for(run.run_id), comparison=diff)
     return HTMLResponse(html, headers={"X-Robots-Tag": "noindex", "Referrer-Policy": "no-referrer"})
 
 

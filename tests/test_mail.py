@@ -44,7 +44,7 @@ class FakeSMTP:
 @pytest.fixture(autouse=True)
 def html_attachment(monkeypatch):
     """These tests check the e-mail itself; PDF attachments are covered in test_pdf.py without a real browser."""
-    def no_pdf(run, shots=None, browser_path=""):
+    def no_pdf(run, shots=None, browser_path="", comparison=None):
         raise reporting.PdfError("tests: no browser")
     monkeypatch.setattr(reporting, "render_pdf", no_pdf)
 

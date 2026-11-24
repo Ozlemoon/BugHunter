@@ -26,14 +26,14 @@ def api_session(api_copy, tmp_path):
 
 
 def fake_pdf(calls=None):
-    def render(run, shots=None, browser_path=""):
+    def render(run, shots=None, browser_path="", comparison=None):
         if calls is not None:
             calls.append((run.run_id, shots))
         return FAKE_PDF
     return render
 
 
-def no_browser(run, shots=None, browser_path=""):
+def no_browser(run, shots=None, browser_path="", comparison=None):
     raise reporting.PdfError("PDF için Edge, Chrome veya Chromium bulunamadı; HTML rapor kullanılabilir.")
 
 

@@ -12,11 +12,11 @@ from __future__ import annotations
 import re
 import smtplib
 import ssl
+from datetime import datetime
 from email.headerregistry import Address
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
 from pathlib import Path
-from datetime import datetime
 from typing import TYPE_CHECKING, Dict, Iterable, List, Optional
 from urllib.parse import urlsplit
 
@@ -74,8 +74,9 @@ def system_name(url: str) -> str:
 
 def build_message(run: HuntRun, recipients: List[str], sender: str, report_url: str,
                   sent_by: str, note: Optional[str] = None, screenshots: Optional[dict] = None,
-                  pdf: Optional[bytes] = None) -> EmailMessage:
-    """With `pdf`, the report is attached as PDF; otherwise as the self-contained HTML file."""
+                  pdf: Optional[bytes] = None, comparison: Optional[dict] = None) -> EmailMessage:
+    """With `pdf`, the report is attached as PDF; otherwise as the self-contained HTML file.
+    `comparison` (core.comparison.compare) adds a "since the previous test" line."""
     name = system_name(run.config.target_url)
     summary = run.summary
     worst = run.worst_severity()
@@ -83,7 +84,8 @@ def build_message(run: HuntRun, recipients: List[str], sender: str, report_url: 
     attachment = f"bughunter-{run.run_id}.{'pdf' if pdf else 'html'}"
     context = dict(run=run, name=name, summary=summary, report_url=report_url, sent_by=sent_by, attachment=attachment,
                    note=(note or "").strip()[:MAX_NOTE_LENGTH], worst=worst.value if worst else None,
-                   logo_src=f"cid:{logo_cid[1:-1]}")
+                   logo_src=f"cid:{logo_cid[1:-1]}",
+                   change=comparison if comparison and comparison.get("previous") else None)
 
     message = EmailMessage()
     message["Subject"] = (f"BugHunter test raporu: {name} · "
@@ -99,7 +101,7 @@ def build_message(run: HuntRun, recipients: List[str], sender: str, report_url: 
     if pdf:
         message.add_attachment(pdf, maintype="application", subtype="pdf", filename=attachment)
     else:
-        message.add_attachment(reporting.render(run, "html", screenshots).encode("utf-8"), maintype="text",
+        message.add_attachment(reporting.render(run, "html", screenshots, comparison).encode("utf-8"), maintype="text",
                                subtype="html", filename=attachment)
     return message
 

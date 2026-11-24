@@ -98,6 +98,25 @@ class RunStore:
                 logger.warning("Skipping unreadable run %s: %s", row["run_id"], error)
         return runs
 
+    def previous_run(self, run: HuntRun, owner_id: Optional[int] = None) -> Optional[HuntRun]:
+        """The latest earlier run of the same target (same address and type) by the same owner."""
+        from core.engine import HuntRun
+
+        with self.db.connect() as db:
+            rows = db.execute(
+                "SELECT run_id, data FROM runs WHERE owner_id IS ? AND target_url = ? AND target_type = ? "
+                "AND run_id != ? AND (started_at < ? OR (started_at = ? AND run_id < ?)) "
+                "ORDER BY started_at DESC, run_id DESC LIMIT 5",
+                (owner_id, run.config.target_url, run.config.target_type.value, run.run_id,
+                 run.started_at.isoformat(), run.started_at.isoformat(), run.run_id),
+            ).fetchall()
+        for row in rows:
+            try:
+                return HuntRun.model_validate_json(row["data"])
+            except ValueError as error:
+                logger.warning("Skipping unreadable run %s: %s", row["run_id"], error)
+        return None
+
     def list_since(self, owner_id: int, since: datetime, limit: int = 500) -> List[HuntRun]:
         """The user's runs started at or after `since`, newest first."""
         from core.engine import HuntRun
