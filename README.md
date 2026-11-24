@@ -1,4 +1,4 @@
-# 🎯 BugHunter AI — İnsan Onaylı Otonom Test ve Hata Analiz Ajanı
+ BugHunter AI — İnsan Onaylı Otonom Test ve Hata Analiz Ajanı
 
 [![CI](https://github.com/Ozlemoon/BugHunter/actions/workflows/ci.yml/badge.svg)](https://github.com/Ozlemoon/BugHunter/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-brightgreen.svg)](https://python.org)
