@@ -50,7 +50,9 @@ class Schedule:
     created_at: datetime
 
     def as_dict(self) -> dict:
-        local = lambda d: d.astimezone().isoformat() if d else None
+        def local(d):
+            return d.astimezone().isoformat() if d else None
+
         return {"id": self.id, "recipients": self.recipients, "interval_days": self.interval_days,
                 "send_time": self.send_time, "site": self.site, "active": self.active,
                 "next_run_at": local(self.next_run_at), "last_sent_at": local(self.last_sent_at),

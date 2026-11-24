@@ -17,10 +17,9 @@ from __future__ import annotations
 
 import base64
 import json
-import re
-from html import escape as html_escape
 import logging
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -28,6 +27,7 @@ import sys
 import tempfile
 import time
 from contextlib import ExitStack, contextmanager
+from html import escape as html_escape
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, Iterator, List, Optional
 from urllib.parse import urlencode, urlsplit, urlunsplit

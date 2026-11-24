@@ -19,8 +19,11 @@ from typing import Dict, List, Optional
 import httpx
 from pydantic import BaseModel, Field, field_validator
 
+from core import screenshots
 from core.analyzer import BugAnalyzer
+from core.auth import UserStore
 from core.config import PROJECT_ROOT, Settings, get_settings
+from core.database import Database
 from core.generator import ALL_CRITERIA, TestGenerator
 from core.models import (
     BugEvidence,
@@ -36,9 +39,6 @@ from core.models import (
 from core.patcher import CodePatcher, HumanApprovalGate
 from core.remediation import Recommendation, Remediation, advise, recommend
 from core.runner import TestRunner
-from core.auth import UserStore
-from core.database import Database
-from core import screenshots
 from core.storage import RunStore
 from core.targets.api_target import ApiTargetParser
 from core.targets.web_target import WebTargetParser
@@ -329,8 +329,8 @@ class HuntSession:
             if browser is None:
                 logger.info("No Edge/Chrome/Chromium found; web findings get no screenshots")
                 return False
-            capture = lambda findings, tests, results, headers: screenshots.capture_findings(
-                findings, tests, results, browser, headers)
+            def capture(findings, tests, results, headers):
+                return screenshots.capture_findings(findings, tests, results, browser, headers)
         try:
             shots = capture(run.findings, {t.id: t for t in run.tests}, {r.test_id: r for r in run.results},
                             run.config.auth_headers())

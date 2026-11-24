@@ -13,7 +13,7 @@ from core import reporting, screenshots
 from core.config import Settings
 from core.engine import HuntConfig, HuntSession
 from core.models import TargetType, TestCase, TestCriterion, TestResult
-from tests.helpers import API_BASE, PLAYGROUND, WEB_BASE, load_app
+from tests.helpers import API_BASE, WEB_BASE, load_app
 
 PNG = b"\x89PNG\r\n\x1a\nfake-image"
 PASSWORD = "dogru-sifre-123"
@@ -202,7 +202,9 @@ def test_real_browser_shows_the_received_page_cropped_to_the_problem(web_copy):
             shown = browser._call("Runtime.evaluate", returnByValue=True,
                                   expression="document.documentElement.innerText")["result"]["value"]
         png_signature = bytes([0x89]) + b"PNG"
-        size = lambda png: struct.unpack(">II", png[16:24])
+        def size(png):
+            return struct.unpack(">II", png[16:24])
+
         assert crash_png.startswith(png_signature) and xss_png.startswith(png_signature)
         assert size(crash_png)[1] < 200 and size(xss_png)[1] < 450  # cropped, not a blank 1280x800 window
         assert "XSS: sayfaya enjekte edilen kod" in shown  # the injected script really ran
